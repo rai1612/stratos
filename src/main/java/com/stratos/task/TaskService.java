@@ -21,6 +21,13 @@ public class TaskService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
 
+    public org.springframework.data.domain.Page<TaskResponse> searchTasks(
+            com.stratos.payload.request.TaskSearchCriteria criteria,
+            org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.jpa.domain.Specification<Task> spec = TaskSpecification.getSpecification(criteria);
+        return taskRepository.findAll(spec, pageable).map(this::mapToResponse);
+    }
+
     @Transactional
     public TaskResponse createTask(TaskRequest request) {
         Project project = projectRepository.findById(request.getProjectId())

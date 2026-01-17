@@ -40,6 +40,15 @@ public class TaskController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/search")
+    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<org.springframework.data.domain.Page<TaskResponse>> searchTasks(
+            com.stratos.payload.request.TaskSearchCriteria criteria,
+            org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Page<TaskResponse> response = taskService.searchTasks(criteria, pageable);
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<TaskResponse> updateTask(@PathVariable Long id, @Valid @RequestBody TaskRequest request) {
