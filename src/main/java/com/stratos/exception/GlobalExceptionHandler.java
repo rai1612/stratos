@@ -6,6 +6,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.security.access.AccessDeniedException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -14,6 +17,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<MessageResponse> resourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
         MessageResponse message = new MessageResponse(ex.getMessage());
         return new ResponseEntity<>(message, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<MessageResponse> badCredentialsException(BadCredentialsException ex, WebRequest request) {
+        MessageResponse message = new MessageResponse(ex.getMessage());
+        return new ResponseEntity<>(message, HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<MessageResponse> noResourceFoundException(NoResourceFoundException ex, WebRequest request) {
+        MessageResponse message = new MessageResponse(ex.getMessage());
+        return new ResponseEntity<>(message, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<MessageResponse> accessDeniedException(AccessDeniedException ex, WebRequest request) {
+        MessageResponse message = new MessageResponse(ex.getMessage());
+        return new ResponseEntity<>(message, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(Exception.class)

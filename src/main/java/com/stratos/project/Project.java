@@ -20,10 +20,10 @@ public class Project extends BaseEntity {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true, length = 10)
     private String projectKey; // e.g. "STRAT" for Stratos Project
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workspace_id", nullable = false)
+    @JoinColumn(name = "workspace_id", referencedColumnName = "id", nullable = false)
     private Workspace workspace;
 }

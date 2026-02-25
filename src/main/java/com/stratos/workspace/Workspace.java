@@ -17,13 +17,13 @@ import lombok.Setter;
 @Table(name = "workspaces")
 public class Workspace extends BaseEntity {
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String name;
 
     private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id", nullable = false)
+    @JoinColumn(name = "owner_id", referencedColumnName = "id", nullable = false)
     private User owner;
 
 }

@@ -19,19 +19,24 @@ import lombok.Setter;
 @Table(name = "users") // 'user' is a reserved keyword in Postgres
 public class User extends BaseEntity {
 
-    @Column(nullable = false, unique = true)
+    @NotBlank
+    @Size(min = 3, max = 20)
+    @Column(nullable = false, unique = true, length = 20)
     private String username;
 
-    @Column(nullable = false, unique = true)
+    @NotBlank
+    @Size(max = 50)
+    @Email
+    @Column(nullable = false, unique = true, length = 50)
     private String email;
 
+    @NotBlank
     @Column(nullable = false)
     private String password;
 
-    // We will add relationships (Workspaces, Tasks) later as we implement those
-    // entities for cleaner compilation.
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
+    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"), inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"), uniqueConstraints = @UniqueConstraint(columnNames = {
+            "user_id", "role_id" }))
     private Set<Role> roles = new HashSet<>();
 
     public User(String username, String email, String password) {
