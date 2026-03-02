@@ -14,6 +14,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class TaskResponse {
     private Long id;
+    private Long taskNumber;
+    private String taskKey; // e.g. "STRAT-3"
     private String title;
     private String description;
     private TaskStatus status;
@@ -21,6 +23,6 @@ public class TaskResponse {
     private LocalDate dueDate;
     private Long assigneeId;
     private String assigneeUsername;
-    private Long projectId;
+    private Long projectNumber;
     private String projectName;
 }

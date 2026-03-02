@@ -9,13 +9,12 @@ import org.springframework.data.jpa.domain.Specification;
 
 public class TaskSpecification {
 
-    public static Specification<Task> getSpecification(TaskSearchCriteria criteria) {
+    public static Specification<Task> getSpecification(Long projectId, TaskSearchCriteria criteria) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (criteria.getProjectId() != null) {
-                predicates.add(criteriaBuilder.equal(root.get("project").get("id"), criteria.getProjectId()));
-            }
+            // Always scope to the resolved project
+            predicates.add(criteriaBuilder.equal(root.get("project").get("id"), projectId));
 
             if (criteria.getStatus() != null) {
                 predicates.add(criteriaBuilder.equal(root.get("status"), criteria.getStatus()));

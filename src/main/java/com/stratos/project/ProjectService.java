@@ -19,27 +19,34 @@ public class ProjectService {
     private final WorkspaceRepository workspaceRepository;
 
     @Transactional
-    public ProjectResponse createProject(ProjectRequest request) {
-        Workspace workspace = workspaceRepository.findById(request.getWorkspaceId())
+    public ProjectResponse createProject(Long workspaceId, ProjectRequest request) {
+        // Lock workspace for safe counter increment
+        Workspace workspace = workspaceRepository.findByIdForUpdate(workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Workspace not found with id: " + request.getWorkspaceId()));
+                        "Workspace not found with id: " + workspaceId));
 
-        if (projectRepository.existsByWorkspaceIdAndProjectKey(request.getWorkspaceId(), request.getProjectKey())) {
+        if (projectRepository.existsByWorkspaceIdAndProjectKey(workspaceId, request.getProjectKey())) {
             throw new IllegalArgumentException("A project with this key already exists in the workspace");
         }
+
+        // Increment counter and assign scoped number
+        workspace.setProjectCounter(workspace.getProjectCounter() + 1);
+        workspaceRepository.save(workspace);
 
         Project project = new Project();
         project.setName(request.getName());
         project.setProjectKey(request.getProjectKey());
+        project.setProjectNumber(workspace.getProjectCounter());
         project.setWorkspace(workspace);
 
         Project savedProject = projectRepository.save(project);
         return mapToResponse(savedProject);
     }
 
-    public ProjectResponse getProjectById(Long id) {
-        Project project = projectRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found with id: " + id));
+    public ProjectResponse getProjectByNumber(Long workspaceId, Long projectNumber) {
+        Project project = projectRepository.findByWorkspaceIdAndProjectNumber(workspaceId, projectNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found: workspace=" + workspaceId + ", projectNumber=" + projectNumber));
         return mapToResponse(project);
     }
 
@@ -54,11 +61,11 @@ public class ProjectService {
     }
 
     @Transactional
-    public void deleteProject(Long id) {
-        if (!projectRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Project not found with id: " + id);
-        }
-        projectRepository.deleteById(id);
+    public void deleteProject(Long workspaceId, Long projectNumber) {
+        Project project = projectRepository.findByWorkspaceIdAndProjectNumber(workspaceId, projectNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found: workspace=" + workspaceId + ", projectNumber=" + projectNumber));
+        projectRepository.delete(project);
     }
 
     private ProjectResponse mapToResponse(Project project) {
@@ -66,6 +73,7 @@ public class ProjectService {
                 project.getId(),
                 project.getName(),
                 project.getProjectKey(),
+                project.getProjectNumber(),
                 project.getWorkspace().getId());
     }
 }

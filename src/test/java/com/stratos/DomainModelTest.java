@@ -40,15 +40,17 @@ class DomainModelTest extends AbstractIntegrationTest {
         workspace.setOwner(user);
         workspace = entityManager.persistFlushFind(workspace);
 
-        // 3. Create and Save Project
+        // 3. Create and Save Project with scoped number
         Project project = new Project();
         project.setName("Stratos v1");
         project.setProjectKey("STRA");
+        project.setProjectNumber(1L);
         project.setWorkspace(workspace);
         project = entityManager.persistFlushFind(project);
 
-        // 4. Create and Save Task
+        // 4. Create and Save Task with scoped number
         Task task = new Task();
+        task.setTaskNumber(1L);
         task.setTitle("Design Database");
         task.setStatus(TaskStatus.IN_PROGRESS);
         task.setPriority(TaskPriority.HIGH);
@@ -58,7 +60,9 @@ class DomainModelTest extends AbstractIntegrationTest {
 
         // 5. Verification
         assertThat(task.getId()).isNotNull();
+        assertThat(task.getTaskNumber()).isEqualTo(1L);
         assertThat(task.getProject().getName()).isEqualTo("Stratos v1");
+        assertThat(task.getProject().getProjectNumber()).isEqualTo(1L);
         assertThat(task.getProject().getWorkspace().getName()).isEqualTo("Engineering");
         assertThat(task.getAssignee().getUsername()).isEqualTo("akr");
     }

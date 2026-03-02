@@ -13,5 +13,6 @@ public class ProjectResponse {
     private Long id;
     private String name;
     private String projectKey;
+    private Long projectNumber;
     private Long workspaceId;
 }

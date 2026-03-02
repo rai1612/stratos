@@ -18,8 +18,13 @@ import lombok.Setter;
 @Entity
 @Getter
 @Setter
-@Table(name = "tasks")
+@Table(name = "tasks", uniqueConstraints = {
+        @jakarta.persistence.UniqueConstraint(columnNames = { "project_id", "task_number" })
+})
 public class Task extends BaseEntity {
+
+    @Column(name = "task_number", nullable = false)
+    private Long taskNumber; // Scoped within project: 1, 2, 3...
 
     @Column(nullable = false)
     private String title;

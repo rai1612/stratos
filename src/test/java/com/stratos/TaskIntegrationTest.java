@@ -19,7 +19,6 @@ import com.stratos.task.TaskStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -39,41 +38,48 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
     private ObjectMapper objectMapper;
 
     private String token;
-    private Long projectId;
+    private Long workspaceId;
+    private Long projectNumber;
+    private String projectKey;
 
     @BeforeEach
     void setUp() throws Exception {
         token = registerAndLogin("task_user", "task_user@stratos.com");
-        Long workspaceId = createWorkspace("Task WS");
-        projectId = createProject("Task Project", "TSK", workspaceId);
+        workspaceId = createWorkspace("Task WS");
+        projectKey = "TSK";
+        projectNumber = createProject("Task Project", projectKey, workspaceId);
+    }
+
+    private String taskBasePath() {
+        return "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
     }
 
     @Test
-    void shouldCreateTask() throws Exception {
+    void shouldCreateTaskWithScopedNumber() throws Exception {
         TaskRequest request = new TaskRequest();
         request.setTitle("My Task");
         request.setDescription("Do something");
-        request.setProjectId(projectId);
         request.setPriority(TaskPriority.HIGH);
 
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post(taskBasePath())
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("My Task"))
                 .andExpect(jsonPath("$.status").value("TODO"))
-                .andExpect(jsonPath("$.priority").value("HIGH"));
+                .andExpect(jsonPath("$.priority").value("HIGH"))
+                .andExpect(jsonPath("$.taskNumber").value(1))
+                .andExpect(jsonPath("$.taskKey").value(projectKey + "-1"));
     }
 
     @Test
     void shouldFailToCreateTaskWithPastDueDate() throws Exception {
         TaskRequest request = new TaskRequest();
         request.setTitle("Past Task");
-        request.setProjectId(projectId);
         request.setDueDate(java.time.LocalDate.now().minusDays(1)); // Past date
 
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post(taskBasePath())
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -85,10 +91,9 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
     void shouldFailToCreateTaskWithDoneStatus() throws Exception {
         TaskRequest request = new TaskRequest();
         request.setTitle("Done Task");
-        request.setProjectId(projectId);
         request.setStatus(TaskStatus.DONE); // Not allowed on creation
 
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post(taskBasePath())
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -98,14 +103,14 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldAllowUpdatingTaskWithoutRequiredCreationFields() throws Exception {
-        Long taskId = createTask("Validation Update Task");
+        Long taskNumber = createTask("Validation Update Task");
 
-        // Partial update: no projectId, no title
+        // Partial update: no title required on update
         TaskRequest updateRequest = new TaskRequest();
         updateRequest.setDescription("Updating only description");
         updateRequest.setStatus(TaskStatus.DONE); // DONE is allowed on update
 
-        mockMvc.perform(put("/api/tasks/" + taskId)
+        mockMvc.perform(put(taskBasePath() + "/" + taskNumber)
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateRequest)))
@@ -115,56 +120,10 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void shouldAssignTaskToUser() throws Exception {
-        // Create another user to assign
-        registerAndLogin("assignee", "assignee@stratos.com");
-
-        // Login back as main user
-        token = login("task_user", "password123");
-
-        // We need the ID of the assignee, but for simplicity in this integration test
-        // without a dedicated 'getUserByUsername' endpoint, we rely on the fact
-        // that 'assignee' was just created. In a real scenario we'd fetch it.
-        // Assuming ID generation is sequential, we might need a safer way.
-        // Let's rely on the fact that we can get the ID if we had an endpoint.
-        // For now, let's just test assignment by assigning to SELF (task_user).
-
-        // Assign to self
-        // First get self ID by decoding token or just observing a created resource?
-        // Actually, we can just fetch the user profile if we had an endpoint.
-        // Implementation detail: UserServiceImpl loadUserByUsername returns
-        // UserDetailsImpl which has ID.
-        // A better approach for test: Create a task, then update it with assignee.
-
-        // Let's create a task first
-        Long taskId = createTask("Task to Assign");
-
-        // We will skip explicit ID fetching complexity and test the logic:
-        // Create a task with assigneeId (we need a valid ID).
-        // Since we are in @Transactional, and users are created in this test,
-        // we can guess ID or, cleaner:
-        // The helper 'registerAndLogin' could return the User ID.
-        // Let's modify registerAndLogin to return a Wrapper or just use a dedicated
-        // helper.
-
-        // For this test, I'll modify the flow:
-        // 1. Create task without assignee.
-        // 2. Verify assignee is null.
-        // 3. (Optional) Testing assignment requires a known User ID.
-        // I will skip explicit "assign to specific ID" test if I can't easily get the
-        // ID,
-        // but I can 'get' the current user details via an endpoint if available.
-        // Wait, I don't have a /api/users/me endpoint.
-        // Okay, I will skip Assignee verification in this specific test strictly
-        // unless I query the DB directly in the test (which I can do since it's
-        // @SpringBootTest).
-    }
-
-    @Test
     void shouldUpdateTaskStatus() throws Exception {
-        Long taskId = createTask("Status Task");
+        Long taskNumber = createTask("Status Task");
 
-        mockMvc.perform(patch("/api/tasks/" + taskId + "/status")
+        mockMvc.perform(patch(taskBasePath() + "/" + taskNumber + "/status")
                 .header("Authorization", "Bearer " + token)
                 .param("status", "IN_PROGRESS"))
                 .andExpect(status().isOk())
@@ -173,23 +132,36 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldDeleteTask() throws Exception {
-        Long taskId = createTask("Delete Task");
+        Long taskNumber = createTask("Delete Task");
 
-        mockMvc.perform(delete("/api/tasks/" + taskId)
+        mockMvc.perform(delete(taskBasePath() + "/" + taskNumber)
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/tasks/" + taskId)
+        mockMvc.perform(get(taskBasePath() + "/" + taskNumber)
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void shouldAssignSequentialTaskNumbers() throws Exception {
+        Long tn1 = createTask("Task 1");
+        Long tn2 = createTask("Task 2");
+        Long tn3 = createTask("Task 3");
+
+        org.junit.jupiter.api.Assertions.assertEquals(1L, tn1);
+        org.junit.jupiter.api.Assertions.assertEquals(2L, tn2);
+        org.junit.jupiter.api.Assertions.assertEquals(3L, tn3);
+    }
+
+    /**
+     * Creates a task and returns the taskNumber.
+     */
     private Long createTask(String title) throws Exception {
         TaskRequest request = new TaskRequest();
         request.setTitle(title);
-        request.setProjectId(projectId);
 
-        MvcResult result = mockMvc.perform(post("/api/tasks")
+        MvcResult result = mockMvc.perform(post(taskBasePath())
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -197,16 +169,15 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
                 .andReturn();
 
         String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asLong();
+        return objectMapper.readTree(response).get("taskNumber").asLong();
     }
 
-    private Long createProject(String name, String key, Long workspaceId) throws Exception {
+    private Long createProject(String name, String key, Long wsId) throws Exception {
         ProjectRequest request = new ProjectRequest();
         request.setName(name);
         request.setProjectKey(key);
-        request.setWorkspaceId(workspaceId);
 
-        MvcResult result = mockMvc.perform(post("/api/projects")
+        MvcResult result = mockMvc.perform(post("/api/workspaces/" + wsId + "/projects")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -214,7 +185,7 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
                 .andReturn();
 
         String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asLong();
+        return objectMapper.readTree(response).get("projectNumber").asLong();
     }
 
     private Long createWorkspace(String name) throws Exception {

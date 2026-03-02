@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
-@RequestMapping("/api/projects")
+@RequestMapping("/api/workspaces/{workspaceId}/projects")
 @RequiredArgsConstructor
 public class ProjectController {
 
@@ -20,29 +20,35 @@ public class ProjectController {
 
     @PostMapping
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<ProjectResponse> createProject(@Valid @RequestBody ProjectRequest request) {
-        ProjectResponse response = projectService.createProject(request);
+    public ResponseEntity<ProjectResponse> createProject(
+            @PathVariable Long workspaceId,
+            @Valid @RequestBody ProjectRequest request) {
+        ProjectResponse response = projectService.createProject(workspaceId, request);
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{projectNumber}")
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<ProjectResponse> getProjectById(@PathVariable Long id) {
-        ProjectResponse response = projectService.getProjectById(id);
+    public ResponseEntity<ProjectResponse> getProjectByNumber(
+            @PathVariable Long workspaceId,
+            @PathVariable Long projectNumber) {
+        ProjectResponse response = projectService.getProjectByNumber(workspaceId, projectNumber);
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/workspace/{workspaceId}")
+    @GetMapping
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<List<ProjectResponse>> getAllProjectsByWorkspace(@PathVariable Long workspaceId) {
         List<ProjectResponse> response = projectService.getAllProjectsByWorkspace(workspaceId);
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{projectNumber}")
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteProject(@PathVariable Long id) {
-        projectService.deleteProject(id);
+    public ResponseEntity<Void> deleteProject(
+            @PathVariable Long workspaceId,
+            @PathVariable Long projectNumber) {
+        projectService.deleteProject(workspaceId, projectNumber);
         return ResponseEntity.noContent().build();
     }
 }

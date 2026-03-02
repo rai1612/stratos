@@ -26,4 +26,7 @@ public class Workspace extends BaseEntity {
     @JoinColumn(name = "owner_id", referencedColumnName = "id", nullable = false)
     private User owner;
 
+    @Column(nullable = false)
+    private Long projectCounter = 0L;
+
 }

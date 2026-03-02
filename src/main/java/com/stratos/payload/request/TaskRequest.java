@@ -4,7 +4,6 @@ import com.stratos.task.TaskPriority;
 import com.stratos.task.TaskStatus;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import lombok.Getter;
@@ -28,7 +27,4 @@ public class TaskRequest {
     private LocalDate dueDate;
 
     private Long assigneeId; // Optional
-
-    @NotNull(groups = OnCreate.class)
-    private Long projectId;
 }

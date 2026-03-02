@@ -15,7 +15,8 @@ import lombok.Setter;
 @Getter
 @Setter
 @Table(name = "projects", uniqueConstraints = {
-        @jakarta.persistence.UniqueConstraint(columnNames = { "workspace_id", "project_key" })
+        @jakarta.persistence.UniqueConstraint(columnNames = { "workspace_id", "project_key" }),
+        @jakarta.persistence.UniqueConstraint(columnNames = { "workspace_id", "project_number" })
 })
 public class Project extends BaseEntity {
 
@@ -24,6 +25,12 @@ public class Project extends BaseEntity {
 
     @Column(name = "project_key", nullable = false, length = 10)
     private String projectKey; // e.g. "STRAT" for Stratos Project
+
+    @Column(name = "project_number", nullable = false)
+    private Long projectNumber; // Scoped within workspace: 1, 2, 3...
+
+    @Column(nullable = false)
+    private Long taskCounter = 0L;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workspace_id", referencedColumnName = "id", nullable = false)

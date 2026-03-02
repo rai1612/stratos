@@ -1,7 +1,6 @@
 package com.stratos.payload.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,7 +14,4 @@ public class ProjectRequest {
     @NotBlank
     @Size(min = 3, max = 10)
     private String projectKey;
-
-    @NotNull
-    private Long workspaceId;
 }

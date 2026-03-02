@@ -2,6 +2,7 @@ package com.stratos;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -18,7 +19,6 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -31,139 +31,171 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class TaskSearchIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    private String token;
-    private Long projectId;
+        private String token;
+        private Long workspaceId;
+        private Long projectNumber;
 
-    @BeforeEach
-    void setUp() throws Exception {
-        token = registerAndLogin("search_user", "search@stratos.com");
-        Long workspaceId = createWorkspace("Search WS");
-        projectId = createProject("Search Project", "SRCH", workspaceId);
+        @BeforeEach
+        void setUp() throws Exception {
+                token = registerAndLogin("search_user", "search@stratos.com");
+                workspaceId = createWorkspace("Search WS");
+                projectNumber = createProject("Search Project", "SRCH", workspaceId);
 
-        // Seed Data
-        createTask("Task 1", TaskStatus.TODO, TaskPriority.LOW, LocalDate.now().plusDays(1));
-        createTask("Task 2", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, LocalDate.now().plusDays(2));
-        createTask("Task 3", TaskStatus.DONE, TaskPriority.MEDIUM, LocalDate.now().plusDays(3));
-        createTask("Task 4", TaskStatus.TODO, TaskPriority.HIGH, LocalDate.now().plusDays(4));
-    }
+                String taskBasePath = "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
 
-    @Test
-    void shouldFilterTasksByStatus() throws Exception {
-        mockMvc.perform(get("/api/tasks/search")
-                .header("Authorization", "Bearer " + token)
-                .param("status", "TODO"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content", hasSize(2)));
-    }
+                // Seed Data
+                createTask("Task 1", TaskStatus.TODO, TaskPriority.LOW, LocalDate.now().plusDays(1));
+                createTask("Task 2", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, LocalDate.now().plusDays(2));
+                // Cannot create with DONE status, so create as IN_PROGRESS and then update
+                Long task3Number = createTaskAndGetNumber("Task 3", TaskStatus.IN_PROGRESS, TaskPriority.MEDIUM,
+                                LocalDate.now().plusDays(3));
+                mockMvc.perform(patch(taskBasePath + "/" + task3Number + "/status")
+                                .header("Authorization", "Bearer " + token)
+                                .param("status", "DONE"))
+                                .andExpect(status().isOk());
+                createTask("Task 4", TaskStatus.TODO, TaskPriority.HIGH, LocalDate.now().plusDays(4));
+        }
 
-    @Test
-    void shouldFilterTasksByPriority() throws Exception {
-        mockMvc.perform(get("/api/tasks/search")
-                .header("Authorization", "Bearer " + token)
-                .param("priority", "HIGH"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content", hasSize(2)));
-    }
+        private String searchPath() {
+                return "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks/search";
+        }
 
-    @Test
-    void shouldFilterTasksByDateRange() throws Exception {
-        String start = LocalDate.now().plusDays(1).toString();
-        String end = LocalDate.now().plusDays(2).toString();
+        @Test
+        void shouldFilterTasksByStatus() throws Exception {
+                mockMvc.perform(get(searchPath())
+                                .header("Authorization", "Bearer " + token)
+                                .param("status", "TODO"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(2)));
+        }
 
-        mockMvc.perform(get("/api/tasks/search")
-                .header("Authorization", "Bearer " + token)
-                .param("dueDateStart", start)
-                .param("dueDateEnd", end))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content", hasSize(2)));
-    }
+        @Test
+        void shouldFilterTasksByPriority() throws Exception {
+                mockMvc.perform(get(searchPath())
+                                .header("Authorization", "Bearer " + token)
+                                .param("priority", "HIGH"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(2)));
+        }
 
-    @Test
-    void shouldPaginateResults() throws Exception {
-        mockMvc.perform(get("/api/tasks/search")
-                .header("Authorization", "Bearer " + token)
-                .param("page", "0")
-                .param("size", "2"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content", hasSize(2)))
-                .andExpect(jsonPath("$.totalElements").value(4));
-    }
+        @Test
+        void shouldFilterTasksByDateRange() throws Exception {
+                String start = LocalDate.now().plusDays(1).toString();
+                String end = LocalDate.now().plusDays(2).toString();
 
-    private void createTask(String title, TaskStatus status, TaskPriority priority, LocalDate dueDate)
-            throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle(title);
-        request.setProjectId(projectId);
-        request.setStatus(status);
-        request.setPriority(priority);
-        request.setDueDate(dueDate);
+                mockMvc.perform(get(searchPath())
+                                .header("Authorization", "Bearer " + token)
+                                .param("dueDateStart", start)
+                                .param("dueDateEnd", end))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(2)));
+        }
 
-        mockMvc.perform(post("/api/tasks")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
-    }
+        @Test
+        void shouldPaginateResults() throws Exception {
+                mockMvc.perform(get(searchPath())
+                                .header("Authorization", "Bearer " + token)
+                                .param("page", "0")
+                                .param("size", "2"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content", hasSize(2)))
+                                .andExpect(jsonPath("$.page.totalElements").value(4));
+        }
 
-    private Long createProject(String name, String key, Long workspaceId) throws Exception {
-        ProjectRequest request = new ProjectRequest();
-        request.setName(name);
-        request.setProjectKey(key);
-        request.setWorkspaceId(workspaceId);
+        private void createTask(String title, TaskStatus status, TaskPriority priority, LocalDate dueDate)
+                        throws Exception {
+                TaskRequest request = new TaskRequest();
+                request.setTitle(title);
+                request.setStatus(status);
+                request.setPriority(priority);
+                request.setDueDate(dueDate);
 
-        MvcResult result = mockMvc.perform(post("/api/projects")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
+                String taskPath = "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
+                mockMvc.perform(post(taskPath)
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk());
+        }
 
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asLong();
-    }
+        private Long createTaskAndGetNumber(String title, TaskStatus status, TaskPriority priority, LocalDate dueDate)
+                        throws Exception {
+                TaskRequest request = new TaskRequest();
+                request.setTitle(title);
+                request.setStatus(status);
+                request.setPriority(priority);
+                request.setDueDate(dueDate);
 
-    private Long createWorkspace(String name) throws Exception {
-        WorkspaceRequest request = new WorkspaceRequest();
-        request.setName(name);
+                String taskPath = "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
+                MvcResult result = mockMvc.perform(post(taskPath)
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
 
-        MvcResult result = mockMvc.perform(post("/api/workspaces")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
+                String response = result.getResponse().getContentAsString();
+                return objectMapper.readTree(response).get("taskNumber").asLong();
+        }
 
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asLong();
-    }
+        private Long createProject(String name, String key, Long wsId) throws Exception {
+                ProjectRequest request = new ProjectRequest();
+                request.setName(name);
+                request.setProjectKey(key);
 
-    private String registerAndLogin(String username, String email) throws Exception {
-        SignupRequest signupRequest = new SignupRequest();
-        signupRequest.setUsername(username);
-        signupRequest.setEmail(email);
-        signupRequest.setPassword("password123");
+                MvcResult result = mockMvc.perform(post("/api/workspaces/" + wsId + "/projects")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
 
-        mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(signupRequest)));
+                String response = result.getResponse().getContentAsString();
+                return objectMapper.readTree(response).get("projectNumber").asLong();
+        }
 
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername(username);
-        loginRequest.setPassword("password123");
+        private Long createWorkspace(String name) throws Exception {
+                WorkspaceRequest request = new WorkspaceRequest();
+                request.setName(name);
 
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andReturn();
+                MvcResult result = mockMvc.perform(post("/api/workspaces")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andReturn();
 
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("token").asText();
-    }
+                String response = result.getResponse().getContentAsString();
+                return objectMapper.readTree(response).get("id").asLong();
+        }
+
+        private String registerAndLogin(String username, String email) throws Exception {
+                SignupRequest signupRequest = new SignupRequest();
+                signupRequest.setUsername(username);
+                signupRequest.setEmail(email);
+                signupRequest.setPassword("password123");
+
+                mockMvc.perform(post("/api/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(signupRequest)));
+
+                LoginRequest loginRequest = new LoginRequest();
+                loginRequest.setUsername(username);
+                loginRequest.setPassword("password123");
+
+                MvcResult result = mockMvc.perform(post("/api/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(loginRequest)))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                String response = result.getResponse().getContentAsString();
+                return objectMapper.readTree(response).get("token").asText();
+        }
 }

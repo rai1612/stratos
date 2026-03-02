@@ -12,7 +12,6 @@ public class TaskSearchCriteria {
     private TaskStatus status;
     private TaskPriority priority;
     private Long assigneeId;
-    private Long projectId;
     private LocalDate dueDateStart;
     private LocalDate dueDateEnd;
 }
