@@ -10,6 +10,11 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.util.HashMap;
+import java.util.Map;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -35,6 +40,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<MessageResponse> accessDeniedException(AccessDeniedException ex, WebRequest request) {
         MessageResponse message = new MessageResponse(ex.getMessage());
         return new ResponseEntity<>(message, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<MessageResponse> illegalArgumentException(IllegalArgumentException ex, WebRequest request) {
+        MessageResponse message = new MessageResponse(ex.getMessage());
+        return new ResponseEntity<>(message, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)

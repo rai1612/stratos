@@ -21,6 +21,7 @@ public class TaskService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
 
+    @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<TaskResponse> searchTasks(
             com.stratos.payload.request.TaskSearchCriteria criteria,
             org.springframework.data.domain.Pageable pageable) {
@@ -33,6 +34,10 @@ public class TaskService {
         Project project = projectRepository.findById(request.getProjectId())
                 .orElseThrow(
                         () -> new ResourceNotFoundException("Project not found with id: " + request.getProjectId()));
+
+        if (request.getStatus() == TaskStatus.DONE) {
+            throw new IllegalArgumentException("Task status cannot be DONE on creation");
+        }
 
         Task task = new Task();
         task.setTitle(request.getTitle());
@@ -61,6 +66,7 @@ public class TaskService {
         return mapToResponse(task);
     }
 
+    @Transactional(readOnly = true)
     public List<TaskResponse> getTasksByProject(Long projectId) {
         if (!projectRepository.existsById(projectId)) {
             throw new ResourceNotFoundException("Project not found with id: " + projectId);
@@ -93,6 +99,13 @@ public class TaskService {
             task.setAssignee(assignee);
         } else {
             task.setAssignee(null); // Unassign if null
+        }
+
+        if (request.getProjectId() != null && !task.getProject().getId().equals(request.getProjectId())) {
+            Project newProject = projectRepository.findById(request.getProjectId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Project not found with id: " + request.getProjectId()));
+            task.setProject(newProject);
         }
 
         Task updatedTask = taskRepository.save(task);

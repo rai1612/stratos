@@ -7,4 +7,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<Project> findByWorkspaceId(Long workspaceId);
+
+    boolean existsByWorkspaceIdAndProjectKey(Long workspaceId, String projectKey);
 }

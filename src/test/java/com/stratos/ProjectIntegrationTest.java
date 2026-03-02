@@ -97,6 +97,47 @@ class ProjectIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void shouldFailToCreateDuplicateProjectKeyInSameWorkspace() throws Exception {
+        // Create first project
+        ProjectRequest request1 = new ProjectRequest();
+        request1.setName("First Project");
+        request1.setProjectKey("DUP");
+        request1.setWorkspaceId(workspaceId);
+
+        mockMvc.perform(post("/api/projects")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request1)))
+                .andExpect(status().isOk());
+
+        // Attempt to create second project with the same key in the same workspace
+        ProjectRequest request2 = new ProjectRequest();
+        request2.setName("Second Project");
+        request2.setProjectKey("DUP");
+        request2.setWorkspaceId(workspaceId);
+
+        mockMvc.perform(post("/api/projects")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request2)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("A project with this key already exists in the workspace"));
+
+        // Ensure that the same key can be used in a different workspace
+        Long workspaceId2 = createWorkspace("Second WS");
+        ProjectRequest request3 = new ProjectRequest();
+        request3.setName("Third Project");
+        request3.setProjectKey("DUP");
+        request3.setWorkspaceId(workspaceId2);
+
+        mockMvc.perform(post("/api/projects")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request3)))
+                .andExpect(status().isOk());
+    }
+
     private Long createProject(String name, String key) throws Exception {
         ProjectRequest request = new ProjectRequest();
         request.setName(name);

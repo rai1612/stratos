@@ -14,13 +14,15 @@ import lombok.Setter;
 @Entity
 @Getter
 @Setter
-@Table(name = "projects")
+@Table(name = "projects", uniqueConstraints = {
+        @jakarta.persistence.UniqueConstraint(columnNames = { "workspace_id", "project_key" })
+})
 public class Project extends BaseEntity {
 
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, unique = true, length = 10)
+    @Column(name = "project_key", nullable = false, length = 10)
     private String projectKey; // e.g. "STRAT" for Stratos Project
 
     @ManyToOne(fetch = FetchType.LAZY)

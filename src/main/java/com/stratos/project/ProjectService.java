@@ -24,6 +24,10 @@ public class ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Workspace not found with id: " + request.getWorkspaceId()));
 
+        if (projectRepository.existsByWorkspaceIdAndProjectKey(request.getWorkspaceId(), request.getProjectKey())) {
+            throw new IllegalArgumentException("A project with this key already exists in the workspace");
+        }
+
         Project project = new Project();
         project.setName(request.getName());
         project.setProjectKey(request.getProjectKey());

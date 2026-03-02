@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -63,6 +64,54 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.title").value("My Task"))
                 .andExpect(jsonPath("$.status").value("TODO"))
                 .andExpect(jsonPath("$.priority").value("HIGH"));
+    }
+
+    @Test
+    void shouldFailToCreateTaskWithPastDueDate() throws Exception {
+        TaskRequest request = new TaskRequest();
+        request.setTitle("Past Task");
+        request.setProjectId(projectId);
+        request.setDueDate(java.time.LocalDate.now().minusDays(1)); // Past date
+
+        mockMvc.perform(post("/api/tasks")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.dueDate").value("Due date must be today or in the future"));
+    }
+
+    @Test
+    void shouldFailToCreateTaskWithDoneStatus() throws Exception {
+        TaskRequest request = new TaskRequest();
+        request.setTitle("Done Task");
+        request.setProjectId(projectId);
+        request.setStatus(TaskStatus.DONE); // Not allowed on creation
+
+        mockMvc.perform(post("/api/tasks")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Task status cannot be DONE on creation"));
+    }
+
+    @Test
+    void shouldAllowUpdatingTaskWithoutRequiredCreationFields() throws Exception {
+        Long taskId = createTask("Validation Update Task");
+
+        // Partial update: no projectId, no title
+        TaskRequest updateRequest = new TaskRequest();
+        updateRequest.setDescription("Updating only description");
+        updateRequest.setStatus(TaskStatus.DONE); // DONE is allowed on update
+
+        mockMvc.perform(put("/api/tasks/" + taskId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Updating only description"))
+                .andExpect(jsonPath("$.status").value("DONE"));
     }
 
     @Test

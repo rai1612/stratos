@@ -2,9 +2,11 @@ package com.stratos.controllers;
 
 import com.stratos.payload.request.TaskRequest;
 import com.stratos.payload.response.TaskResponse;
+import com.stratos.payload.request.OnCreate;
+import com.stratos.payload.request.OnUpdate;
 import com.stratos.task.TaskService;
 import com.stratos.task.TaskStatus;
-import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +23,7 @@ public class TaskController {
 
     @PostMapping
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<TaskResponse> createTask(@Valid @RequestBody TaskRequest request) {
+    public ResponseEntity<TaskResponse> createTask(@Validated(OnCreate.class) @RequestBody TaskRequest request) {
         TaskResponse response = taskService.createTask(request);
         return ResponseEntity.ok(response);
     }
@@ -51,7 +53,8 @@ public class TaskController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<TaskResponse> updateTask(@PathVariable Long id, @Valid @RequestBody TaskRequest request) {
+    public ResponseEntity<TaskResponse> updateTask(@PathVariable Long id,
+            @Validated(OnUpdate.class) @RequestBody TaskRequest request) {
         TaskResponse response = taskService.updateTask(id, request);
         return ResponseEntity.ok(response);
     }
