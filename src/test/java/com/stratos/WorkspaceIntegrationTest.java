@@ -7,31 +7,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.stratos.payload.request.LoginRequest;
-import com.stratos.payload.request.SignupRequest;
 import com.stratos.payload.request.WorkspaceRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
-@SpringBootTest
-@AutoConfigureMockMvc
 @Transactional
 class WorkspaceIntegrationTest extends AbstractIntegrationTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     private String token;
 
@@ -57,8 +40,8 @@ class WorkspaceIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldGetAllWorkspacesForUser() throws Exception {
-        createWorkspace("WS 1");
-        createWorkspace("WS 2");
+        createWorkspace(token, "WS 1");
+        createWorkspace(token, "WS 2");
 
         mockMvc.perform(get("/api/workspaces")
                 .header("Authorization", "Bearer " + token))
@@ -68,7 +51,7 @@ class WorkspaceIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldGetWorkspaceById() throws Exception {
-        Long workspaceId = createWorkspace("Target WS");
+        Long workspaceId = createWorkspace(token, "Target WS");
 
         mockMvc.perform(get("/api/workspaces/" + workspaceId)
                 .header("Authorization", "Bearer " + token))
@@ -78,7 +61,7 @@ class WorkspaceIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldDeleteWorkspace() throws Exception {
-        Long workspaceId = createWorkspace("To Delete");
+        Long workspaceId = createWorkspace(token, "To Delete");
 
         mockMvc.perform(delete("/api/workspaces/" + workspaceId)
                 .header("Authorization", "Bearer " + token))
@@ -96,43 +79,31 @@ class WorkspaceIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    private Long createWorkspace(String name) throws Exception {
-        WorkspaceRequest request = new WorkspaceRequest();
-        request.setName(name);
-        request.setDescription("Desc");
+    // ========================================================================
+    // Validation edge cases
+    // ========================================================================
 
-        MvcResult result = mockMvc.perform(post("/api/workspaces")
+    @Test
+    void shouldRejectBlankWorkspaceName() throws Exception {
+        WorkspaceRequest request = new WorkspaceRequest();
+        request.setName(""); // @NotBlank
+
+        mockMvc.perform(post("/api/workspaces")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asLong();
+                .andExpect(status().isBadRequest());
     }
 
-    private String registerAndLogin(String username, String email) throws Exception {
-        SignupRequest signupRequest = new SignupRequest();
-        signupRequest.setUsername(username);
-        signupRequest.setEmail(email);
-        signupRequest.setPassword("password123");
+    @Test
+    void shouldRejectWorkspaceNameTooLong() throws Exception {
+        WorkspaceRequest request = new WorkspaceRequest();
+        request.setName("a".repeat(51)); // @Size(max = 50)
 
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/workspaces")
+                .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(signupRequest)));
-
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername(username);
-        loginRequest.setPassword("password123");
-
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("token").asText();
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
     }
 }

@@ -8,34 +8,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.stratos.payload.request.LoginRequest;
-import com.stratos.payload.request.ProjectRequest;
-import com.stratos.payload.request.SignupRequest;
 import com.stratos.payload.request.TaskRequest;
-import com.stratos.payload.request.WorkspaceRequest;
 import com.stratos.task.TaskPriority;
 import com.stratos.task.TaskStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
-@SpringBootTest
-@AutoConfigureMockMvc
 @Transactional
 class TaskIntegrationTest extends AbstractIntegrationTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     private String token;
     private Long workspaceId;
@@ -45,9 +28,9 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() throws Exception {
         token = registerAndLogin("task_user", "task_user@stratos.com");
-        workspaceId = createWorkspace("Task WS");
+        workspaceId = createWorkspace(token, "Task WS");
         projectKey = "TSK";
-        projectNumber = createProject("Task Project", projectKey, workspaceId);
+        projectNumber = createProject(token, "Task Project", projectKey, workspaceId);
     }
 
     private String taskBasePath() {
@@ -154,6 +137,122 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(3L, tn3);
     }
 
+    // ========================================================================
+    // Validation edge cases
+    // ========================================================================
+
+    @Test
+    void shouldRejectBlankTitle() throws Exception {
+        TaskRequest request = new TaskRequest();
+        request.setTitle(""); // @NotBlank
+
+        mockMvc.perform(post(taskBasePath())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectTitleTooLong() throws Exception {
+        TaskRequest request = new TaskRequest();
+        request.setTitle("a".repeat(101)); // @Size(max = 100)
+
+        mockMvc.perform(post(taskBasePath())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectDescriptionTooLong() throws Exception {
+        TaskRequest request = new TaskRequest();
+        request.setTitle("Valid Title");
+        request.setDescription("a".repeat(501)); // @Size(max = 500)
+
+        mockMvc.perform(post(taskBasePath())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ========================================================================
+    // Not-found edge cases
+    // ========================================================================
+
+    @Test
+    void shouldReturn404ForNonExistentTask() throws Exception {
+        mockMvc.perform(get(taskBasePath() + "/999")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturn404WhenUpdatingNonExistentTask() throws Exception {
+        TaskRequest request = new TaskRequest();
+        request.setTitle("Ghost Task");
+
+        mockMvc.perform(put(taskBasePath() + "/999")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturn404WhenDeletingNonExistentTask() throws Exception {
+        mockMvc.perform(delete(taskBasePath() + "/999")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturn404ForTaskUnderNonExistentProject() throws Exception {
+        mockMvc.perform(get("/api/workspaces/" + workspaceId + "/projects/999/tasks/1")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    // ========================================================================
+    // Cross-entity isolation
+    // ========================================================================
+
+    @Test
+    void shouldScopeTaskNumbersPerProject() throws Exception {
+        // Create tasks in first project
+        Long tn1 = createTask("Project1 Task1");
+        Long tn2 = createTask("Project1 Task2");
+
+        // Create a second project
+        Long project2Number = createProject(token, "Second Project", "PRJ2", workspaceId);
+        String project2TaskPath = "/api/workspaces/" + workspaceId + "/projects/" + project2Number + "/tasks";
+
+        // Create task in second project — should start from 1
+        TaskRequest request = new TaskRequest();
+        request.setTitle("Project2 Task1");
+
+        MvcResult result = mockMvc.perform(post(project2TaskPath)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Long p2tn1 = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("taskNumber").asLong();
+
+        // Project 1 tasks: 1, 2; Project 2 tasks: 1 (independent)
+        org.junit.jupiter.api.Assertions.assertEquals(1L, tn1);
+        org.junit.jupiter.api.Assertions.assertEquals(2L, tn2);
+        org.junit.jupiter.api.Assertions.assertEquals(1L, p2tn1);
+    }
+
+    // ========================================================================
+    // Helper
+    // ========================================================================
+
     /**
      * Creates a task and returns the taskNumber.
      */
@@ -170,64 +269,5 @@ class TaskIntegrationTest extends AbstractIntegrationTest {
 
         String response = result.getResponse().getContentAsString();
         return objectMapper.readTree(response).get("taskNumber").asLong();
-    }
-
-    private Long createProject(String name, String key, Long wsId) throws Exception {
-        ProjectRequest request = new ProjectRequest();
-        request.setName(name);
-        request.setProjectKey(key);
-
-        MvcResult result = mockMvc.perform(post("/api/workspaces/" + wsId + "/projects")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("projectNumber").asLong();
-    }
-
-    private Long createWorkspace(String name) throws Exception {
-        WorkspaceRequest request = new WorkspaceRequest();
-        request.setName(name);
-
-        MvcResult result = mockMvc.perform(post("/api/workspaces")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asLong();
-    }
-
-    private String registerAndLogin(String username, String email) throws Exception {
-        SignupRequest signupRequest = new SignupRequest();
-        signupRequest.setUsername(username);
-        signupRequest.setEmail(email);
-        signupRequest.setPassword("password123");
-
-        mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(signupRequest)));
-
-        return login(username, "password123");
-    }
-
-    private String login(String username, String password) throws Exception {
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername(username);
-        loginRequest.setPassword(password);
-
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("token").asText();
     }
 }

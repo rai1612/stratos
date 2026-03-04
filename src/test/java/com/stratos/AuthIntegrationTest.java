@@ -6,29 +6,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stratos.payload.request.LoginRequest;
 import com.stratos.payload.request.SignupRequest;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
-@SpringBootTest
-@AutoConfigureMockMvc
 @Transactional
 class AuthIntegrationTest extends AbstractIntegrationTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @Autowired
     private com.stratos.user.UserRepository userRepository;
@@ -36,92 +24,175 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
-    @Test
-    void shouldRegisterUser() throws Exception {
-        SignupRequest signupRequest = new SignupRequest();
-        signupRequest.setUsername("reg_test_user");
-        signupRequest.setEmail("reg@stratos.com");
-        signupRequest.setPassword("password123");
+    // ========================================================================
+    // Happy path
+    // ========================================================================
 
-        mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(signupRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message", containsString("User registered successfully")));
+    @Nested
+    class HappyPath {
+
+        @Test
+        void shouldRegisterUser() throws Exception {
+            SignupRequest request = new SignupRequest();
+            request.setUsername("reg_user");
+            request.setEmail("reg@stratos.com");
+            request.setPassword("password123");
+
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.message", containsString("User registered successfully")));
+        }
+
+        @Test
+        void shouldLoginUser() throws Exception {
+            com.stratos.user.User user = new com.stratos.user.User();
+            user.setUsername("login_user");
+            user.setEmail("login@stratos.com");
+            user.setPassword(passwordEncoder.encode("password123"));
+            userRepository.save(user);
+
+            LoginRequest request = new LoginRequest();
+            request.setUsername("login_user");
+            request.setPassword("password123");
+
+            mockMvc.perform(post("/api/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.token").exists())
+                    .andExpect(jsonPath("$.username").value("login_user"));
+        }
+
+        @Test
+        void shouldAccessProtectedResourceWithToken() throws Exception {
+            String token = registerAndLogin("access_user", "access@stratos.com");
+
+            mockMvc.perform(get("/api/random/protected")
+                    .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isNotFound()); // Not 401 — proves auth worked
+        }
     }
 
-    @Test
-    void shouldLoginUser() throws Exception {
-        // Setup: Create user directly in DB
-        com.stratos.user.User user = new com.stratos.user.User();
-        user.setUsername("login_test_user");
-        user.setEmail("login@stratos.com");
-        user.setPassword(passwordEncoder.encode("password123"));
-        userRepository.save(user);
+    // ========================================================================
+    // Edge cases
+    // ========================================================================
 
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername("login_test_user");
-        loginRequest.setPassword("password123");
+    @Nested
+    class EdgeCases {
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").exists())
-                .andExpect(jsonPath("$.username").value("login_test_user"));
-    }
+        @Test
+        void shouldRejectDuplicateUsername() throws Exception {
+            // Register first user
+            registerAndLogin("dup_user", "first@stratos.com");
 
-    @Test
-    void shouldFailLoginWithBadCreds() throws Exception {
-        // Setup: Create user
-        com.stratos.user.User user = new com.stratos.user.User();
-        user.setUsername("fail_test_user");
-        user.setEmail("fail@stratos.com");
-        user.setPassword(passwordEncoder.encode("password123"));
-        userRepository.save(user);
+            // Try to register with same username
+            SignupRequest request = new SignupRequest();
+            request.setUsername("dup_user");
+            request.setEmail("second@stratos.com");
+            request.setPassword("password123");
 
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername("fail_test_user");
-        loginRequest.setPassword("wrongPassword");
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message", containsString("Username is already taken")));
+        }
 
-        mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isUnauthorized());
-    }
+        @Test
+        void shouldRejectDuplicateEmail() throws Exception {
+            registerAndLogin("email_user1", "dup@stratos.com");
 
-    @Test
-    void shouldAccessProtectedResourceWithToken() throws Exception {
-        // Setup: Create user
-        com.stratos.user.User user = new com.stratos.user.User();
-        user.setUsername("access_test_user");
-        user.setEmail("access@stratos.com");
-        user.setPassword(passwordEncoder.encode("password123"));
-        userRepository.save(user);
+            SignupRequest request = new SignupRequest();
+            request.setUsername("email_user2");
+            request.setEmail("dup@stratos.com");
+            request.setPassword("password123");
 
-        // Login to get token
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setUsername("access_test_user");
-        loginRequest.setPassword("password123");
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message", containsString("Email is already in use")));
+        }
 
-        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andReturn();
+        @Test
+        void shouldFailLoginWithWrongPassword() throws Exception {
+            registerAndLogin("wrong_pw_user", "wrong@stratos.com");
 
-        String response = loginResult.getResponse().getContentAsString();
-        String token = objectMapper.readTree(response).get("token").asText();
+            LoginRequest request = new LoginRequest();
+            request.setUsername("wrong_pw_user");
+            request.setPassword("wrong_password");
 
-        // Access protected resource
-        mockMvc.perform(get("/api/random/protected")
-                .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound()); // Verified: Not 401
-    }
+            mockMvc.perform(post("/api/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isUnauthorized());
+        }
 
-    @Test
-    void shouldDetermineUnauthorizedAccess() throws Exception {
-        mockMvc.perform(get("/api/random/protected"))
-                .andExpect(status().isUnauthorized());
+        @Test
+        void shouldRejectAccessWithoutToken() throws Exception {
+            mockMvc.perform(get("/api/workspaces"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void shouldRejectMalformedToken() throws Exception {
+            mockMvc.perform(get("/api/workspaces")
+                    .header("Authorization", "Bearer this.is.not.a.valid.jwt"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void shouldRejectBlankUsername() throws Exception {
+            SignupRequest request = new SignupRequest();
+            request.setUsername("");
+            request.setEmail("blank@stratos.com");
+            request.setPassword("password123");
+
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void shouldRejectTooShortUsername() throws Exception {
+            SignupRequest request = new SignupRequest();
+            request.setUsername("ab"); // min 3
+            request.setEmail("short@stratos.com");
+            request.setPassword("password123");
+
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void shouldRejectInvalidEmail() throws Exception {
+            SignupRequest request = new SignupRequest();
+            request.setUsername("invalid_email");
+            request.setEmail("not-an-email");
+            request.setPassword("password123");
+
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void shouldRejectTooShortPassword() throws Exception {
+            SignupRequest request = new SignupRequest();
+            request.setUsername("short_pw");
+            request.setEmail("shortpw@stratos.com");
+            request.setPassword("12345"); // min 6
+
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
     }
 }

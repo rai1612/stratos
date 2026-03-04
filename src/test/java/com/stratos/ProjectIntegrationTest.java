@@ -7,31 +7,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.stratos.payload.request.LoginRequest;
 import com.stratos.payload.request.ProjectRequest;
-import com.stratos.payload.request.SignupRequest;
-import com.stratos.payload.request.WorkspaceRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
-@SpringBootTest
-@AutoConfigureMockMvc
 @Transactional
 class ProjectIntegrationTest extends AbstractIntegrationTest {
-
-        @Autowired
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
 
         private String token;
         private Long workspaceId;
@@ -39,7 +22,7 @@ class ProjectIntegrationTest extends AbstractIntegrationTest {
         @BeforeEach
         void setUp() throws Exception {
                 token = registerAndLogin("project_user", "prj_user@stratos.com");
-                workspaceId = createWorkspace("Project WS");
+                workspaceId = createWorkspace(token, "Project WS");
         }
 
         @Test
@@ -60,8 +43,8 @@ class ProjectIntegrationTest extends AbstractIntegrationTest {
 
         @Test
         void shouldAssignSequentialProjectNumbers() throws Exception {
-                Long pn1 = createProject("Project A", "PRJA");
-                Long pn2 = createProject("Project B", "PRJB");
+                Long pn1 = createProject(token, "Project A", "PRJA", workspaceId);
+                Long pn2 = createProject(token, "Project B", "PRJB", workspaceId);
 
                 // Project numbers should be sequential within the workspace
                 org.junit.jupiter.api.Assertions.assertEquals(1L, pn1);
@@ -70,8 +53,8 @@ class ProjectIntegrationTest extends AbstractIntegrationTest {
 
         @Test
         void shouldGetAllProjectsByWorkspace() throws Exception {
-                createProject("Project A", "PRJA");
-                createProject("Project B", "PRJB");
+                createProject(token, "Project A", "PRJA", workspaceId);
+                createProject(token, "Project B", "PRJB", workspaceId);
 
                 mockMvc.perform(get("/api/workspaces/" + workspaceId + "/projects")
                                 .header("Authorization", "Bearer " + token))
@@ -81,7 +64,7 @@ class ProjectIntegrationTest extends AbstractIntegrationTest {
 
         @Test
         void shouldDeleteProject() throws Exception {
-                Long projectNumber = createProject("To Delete", "DEL");
+                Long projectNumber = createProject(token, "To Delete", "DEL", workspaceId);
 
                 mockMvc.perform(delete("/api/workspaces/" + workspaceId + "/projects/" + projectNumber)
                                 .header("Authorization", "Bearer " + token))
@@ -132,7 +115,7 @@ class ProjectIntegrationTest extends AbstractIntegrationTest {
                                                 .value("A project with this key already exists in the workspace"));
 
                 // Ensure that the same key can be used in a different workspace
-                Long workspaceId2 = createWorkspace("Second WS");
+                Long workspaceId2 = createWorkspace(token, "Second WS");
                 ProjectRequest request3 = new ProjectRequest();
                 request3.setName("Third Project");
                 request3.setProjectKey("DUP");
@@ -145,62 +128,46 @@ class ProjectIntegrationTest extends AbstractIntegrationTest {
                                 .andExpect(jsonPath("$.projectNumber").value(1)); // First project in new workspace
         }
 
-        /**
-         * Creates a project and returns the projectNumber.
-         */
-        private Long createProject(String name, String key) throws Exception {
+        // ====================================================================
+        // Validation edge cases
+        // ====================================================================
+
+        @Test
+        void shouldRejectBlankProjectName() throws Exception {
                 ProjectRequest request = new ProjectRequest();
-                request.setName(name);
-                request.setProjectKey(key);
+                request.setName("");
+                request.setProjectKey("BLK");
 
-                MvcResult result = mockMvc.perform(post("/api/workspaces/" + workspaceId + "/projects")
+                mockMvc.perform(post("/api/workspaces/" + workspaceId + "/projects")
                                 .header("Authorization", "Bearer " + token)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isOk())
-                                .andReturn();
-
-                String response = result.getResponse().getContentAsString();
-                return objectMapper.readTree(response).get("projectNumber").asLong();
+                                .andExpect(status().isBadRequest());
         }
 
-        private Long createWorkspace(String name) throws Exception {
-                WorkspaceRequest request = new WorkspaceRequest();
-                request.setName(name);
-                request.setDescription("Desc");
+        @Test
+        void shouldRejectBlankProjectKey() throws Exception {
+                ProjectRequest request = new ProjectRequest();
+                request.setName("No Key Project");
+                request.setProjectKey("");
 
-                MvcResult result = mockMvc.perform(post("/api/workspaces")
+                mockMvc.perform(post("/api/workspaces/" + workspaceId + "/projects")
                                 .header("Authorization", "Bearer " + token)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isOk())
-                                .andReturn();
-
-                String response = result.getResponse().getContentAsString();
-                return objectMapper.readTree(response).get("id").asLong();
+                                .andExpect(status().isBadRequest());
         }
 
-        private String registerAndLogin(String username, String email) throws Exception {
-                SignupRequest signupRequest = new SignupRequest();
-                signupRequest.setUsername(username);
-                signupRequest.setEmail(email);
-                signupRequest.setPassword("password123");
+        @Test
+        void shouldRejectProjectKeyTooShort() throws Exception {
+                ProjectRequest request = new ProjectRequest();
+                request.setName("Short Key");
+                request.setProjectKey("AB"); // @Size(min = 3)
 
-                mockMvc.perform(post("/api/auth/register")
+                mockMvc.perform(post("/api/workspaces/" + workspaceId + "/projects")
+                                .header("Authorization", "Bearer " + token)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(signupRequest)));
-
-                LoginRequest loginRequest = new LoginRequest();
-                loginRequest.setUsername(username);
-                loginRequest.setPassword("password123");
-
-                MvcResult result = mockMvc.perform(post("/api/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(loginRequest)))
-                                .andExpect(status().isOk())
-                                .andReturn();
-
-                String response = result.getResponse().getContentAsString();
-                return objectMapper.readTree(response).get("token").asText();
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
         }
 }
