@@ -61,6 +61,29 @@ public class ProjectService {
     }
 
     @Transactional
+    public ProjectResponse updateProject(Long workspaceId, Long projectNumber, ProjectRequest request) {
+        Project project = projectRepository.findByWorkspaceIdAndProjectNumber(workspaceId, projectNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found: workspace=" + workspaceId + ", projectNumber=" + projectNumber));
+
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            project.setName(request.getName());
+        }
+
+        if (request.getProjectKey() != null && !request.getProjectKey().trim().isEmpty()
+                && !project.getProjectKey().equals(request.getProjectKey())) {
+
+            if (projectRepository.existsByWorkspaceIdAndProjectKey(workspaceId, request.getProjectKey())) {
+                throw new IllegalArgumentException("A project with this key already exists in the workspace");
+            }
+            project.setProjectKey(request.getProjectKey());
+        }
+
+        Project updatedProject = projectRepository.save(project);
+        return mapToResponse(updatedProject);
+    }
+
+    @Transactional
     public void deleteProject(Long workspaceId, Long projectNumber) {
         Project project = projectRepository.findByWorkspaceIdAndProjectNumber(workspaceId, projectNumber)
                 .orElseThrow(() -> new ResourceNotFoundException(

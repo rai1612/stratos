@@ -46,6 +46,22 @@ public class WorkspaceService {
     }
 
     @Transactional
+    public WorkspaceResponse updateWorkspace(Long id, WorkspaceRequest request) {
+        Workspace workspace = workspaceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Workspace not found with id: " + id));
+
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            workspace.setName(request.getName());
+        }
+        if (request.getDescription() != null) {
+            workspace.setDescription(request.getDescription());
+        }
+
+        Workspace updatedWorkspace = workspaceRepository.save(workspace);
+        return mapToResponse(updatedWorkspace);
+    }
+
+    @Transactional
     public void deleteWorkspace(Long id) {
         if (!workspaceRepository.existsById(id)) {
             throw new ResourceNotFoundException("Workspace not found with id: " + id);

@@ -8,8 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.stratos.exception.ResourceNotFoundException;
-import com.stratos.payload.request.CreateUserRequest;
-import com.stratos.payload.request.UpdateUserRequest;
+import com.stratos.payload.request.UserRequest;
 import com.stratos.payload.response.UserResponse;
 import com.stratos.role.ERole;
 import com.stratos.role.Role;
@@ -133,7 +132,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldCreateUserWithDefaultRole() {
-            CreateUserRequest request = new CreateUserRequest();
+            UserRequest request = new UserRequest();
             request.setUsername("newuser");
             request.setEmail("new@stratos.com");
             request.setPassword("password123");
@@ -157,7 +156,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldResolveAdminRole() {
-            CreateUserRequest request = new CreateUserRequest();
+            UserRequest request = new UserRequest();
             request.setUsername("admin");
             request.setEmail("admin@stratos.com");
             request.setPassword("password");
@@ -180,7 +179,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldResolveManagerRole() {
-            CreateUserRequest request = new CreateUserRequest();
+            UserRequest request = new UserRequest();
             request.setUsername("manager");
             request.setEmail("mgr@stratos.com");
             request.setPassword("password");
@@ -203,7 +202,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldThrowForDuplicateUsername() {
-            CreateUserRequest request = new CreateUserRequest();
+            UserRequest request = new UserRequest();
             request.setUsername("testuser");
             request.setEmail("unique@stratos.com");
             request.setPassword("password");
@@ -217,7 +216,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldThrowForDuplicateEmail() {
-            CreateUserRequest request = new CreateUserRequest();
+            UserRequest request = new UserRequest();
             request.setUsername("unique");
             request.setEmail("test@stratos.com");
             request.setPassword("password");
@@ -240,7 +239,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldUpdateEmailOnly() {
-            UpdateUserRequest request = new UpdateUserRequest();
+            UserRequest request = new UserRequest();
             request.setEmail("new@stratos.com");
 
             when(userRepository.findById(1L)).thenReturn(Optional.of(user));
@@ -254,7 +253,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldSkipEmailCheckIfUnchanged() {
-            UpdateUserRequest request = new UpdateUserRequest();
+            UserRequest request = new UserRequest();
             request.setEmail("test@stratos.com"); // Same as current email
 
             when(userRepository.findById(1L)).thenReturn(Optional.of(user));
@@ -268,7 +267,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldUpdatePasswordOnly() {
-            UpdateUserRequest request = new UpdateUserRequest();
+            UserRequest request = new UserRequest();
             request.setPassword("newpassword");
 
             when(userRepository.findById(1L)).thenReturn(Optional.of(user));
@@ -282,7 +281,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldUpdateRolesOnly() {
-            UpdateUserRequest request = new UpdateUserRequest();
+            UserRequest request = new UserRequest();
             request.setRole(Set.of("admin"));
 
             when(userRepository.findById(1L)).thenReturn(Optional.of(user));
@@ -296,7 +295,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldThrowWhenUserNotFound() {
-            UpdateUserRequest request = new UpdateUserRequest();
+            UserRequest request = new UserRequest();
             request.setEmail("new@stratos.com");
 
             when(userRepository.findById(999L)).thenReturn(Optional.empty());
@@ -307,7 +306,7 @@ class UserServiceImplTest {
 
         @Test
         void shouldThrowForDuplicateEmailOnUpdate() {
-            UpdateUserRequest request = new UpdateUserRequest();
+            UserRequest request = new UserRequest();
             request.setEmail("taken@stratos.com");
 
             when(userRepository.findById(1L)).thenReturn(Optional.of(user));

@@ -4,7 +4,8 @@ import com.stratos.payload.request.WorkspaceRequest;
 import com.stratos.payload.response.WorkspaceResponse;
 import com.stratos.security.services.UserDetailsImpl;
 import com.stratos.workspace.WorkspaceService;
-import jakarta.validation.Valid;
+import com.stratos.validation.ValidationGroups;
+import org.springframework.validation.annotation.Validated;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +25,7 @@ public class WorkspaceController {
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<WorkspaceResponse> createWorkspace(
             @AuthenticationPrincipal UserDetailsImpl userDetails,
-            @Valid @RequestBody WorkspaceRequest request) {
+            @Validated(ValidationGroups.Create.class) @RequestBody WorkspaceRequest request) {
         WorkspaceResponse response = workspaceService.createWorkspace(userDetails.getId(), request);
         return ResponseEntity.ok(response);
     }
@@ -41,6 +42,15 @@ public class WorkspaceController {
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<WorkspaceResponse> getWorkspaceById(@PathVariable Long id) {
         WorkspaceResponse response = workspaceService.getWorkspaceById(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<WorkspaceResponse> updateWorkspace(
+            @PathVariable Long id,
+            @Validated(ValidationGroups.Update.class) @RequestBody WorkspaceRequest request) {
+        WorkspaceResponse response = workspaceService.updateWorkspace(id, request);
         return ResponseEntity.ok(response);
     }
 

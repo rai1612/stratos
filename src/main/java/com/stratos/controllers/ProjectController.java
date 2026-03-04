@@ -3,7 +3,8 @@ package com.stratos.controllers;
 import com.stratos.payload.request.ProjectRequest;
 import com.stratos.payload.response.ProjectResponse;
 import com.stratos.project.ProjectService;
-import jakarta.validation.Valid;
+import com.stratos.validation.ValidationGroups;
+import org.springframework.validation.annotation.Validated;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +23,7 @@ public class ProjectController {
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<ProjectResponse> createProject(
             @PathVariable Long workspaceId,
-            @Valid @RequestBody ProjectRequest request) {
+            @Validated(ValidationGroups.Create.class) @RequestBody ProjectRequest request) {
         ProjectResponse response = projectService.createProject(workspaceId, request);
         return ResponseEntity.ok(response);
     }
@@ -40,6 +41,16 @@ public class ProjectController {
     @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<List<ProjectResponse>> getAllProjectsByWorkspace(@PathVariable Long workspaceId) {
         List<ProjectResponse> response = projectService.getAllProjectsByWorkspace(workspaceId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{projectNumber}")
+    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    public ResponseEntity<ProjectResponse> updateProject(
+            @PathVariable Long workspaceId,
+            @PathVariable Long projectNumber,
+            @Validated(ValidationGroups.Update.class) @RequestBody ProjectRequest request) {
+        ProjectResponse response = projectService.updateProject(workspaceId, projectNumber, request);
         return ResponseEntity.ok(response);
     }
 

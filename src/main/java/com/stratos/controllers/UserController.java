@@ -1,11 +1,11 @@
 package com.stratos.controllers;
 
-import com.stratos.payload.request.CreateUserRequest;
-import com.stratos.payload.request.UpdateUserRequest;
+import com.stratos.payload.request.UserRequest;
+import org.springframework.validation.annotation.Validated;
+import com.stratos.validation.ValidationGroups;
 import com.stratos.payload.response.MessageResponse;
 import com.stratos.payload.response.UserResponse;
 import com.stratos.user.UserService;
-import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -41,13 +41,14 @@ public class UserController {
     }
 
     @PostMapping
-    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
+    public ResponseEntity<UserResponse> createUser(
+            @Validated(ValidationGroups.Create.class) @RequestBody UserRequest request) {
         return new ResponseEntity<>(userService.createUser(request), HttpStatus.CREATED);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
-            @Valid @RequestBody UpdateUserRequest request) {
+            @Validated(ValidationGroups.Update.class) @RequestBody UserRequest request) {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
 

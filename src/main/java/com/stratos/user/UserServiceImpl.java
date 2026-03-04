@@ -1,8 +1,7 @@
 package com.stratos.user;
 
 import com.stratos.exception.ResourceNotFoundException;
-import com.stratos.payload.request.CreateUserRequest;
-import com.stratos.payload.request.UpdateUserRequest;
+import com.stratos.payload.request.UserRequest;
 import com.stratos.payload.response.UserResponse;
 import com.stratos.role.ERole;
 import com.stratos.role.Role;
@@ -40,7 +39,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserResponse createUser(CreateUserRequest request) {
+    public UserResponse createUser(UserRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new IllegalArgumentException("Error: Username is already taken!");
         }
@@ -61,7 +60,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserResponse updateUser(Long id, UpdateUserRequest request) {
+    public UserResponse updateUser(Long id, UserRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 

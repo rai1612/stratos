@@ -9,8 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.stratos.payload.request.CreateUserRequest;
-import com.stratos.payload.request.UpdateUserRequest;
+import com.stratos.payload.request.UserRequest;
 import com.stratos.role.ERole;
 import com.stratos.role.Role;
 import com.stratos.role.RoleRepository;
@@ -106,7 +105,7 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     @Test
     @WithMockUser(username = "admin_user", roles = { "ADMIN" })
     void adminCanCreateUser() throws Exception {
-        CreateUserRequest request = new CreateUserRequest();
+        UserRequest request = new UserRequest();
         request.setUsername("new_user");
         request.setEmail("new@stratos.com");
         request.setPassword("password123");
@@ -122,7 +121,7 @@ class UserIntegrationTest extends AbstractIntegrationTest {
     @Test
     @WithMockUser(username = "admin_user", roles = { "ADMIN" })
     void adminCanUpdateUser() throws Exception {
-        UpdateUserRequest request = new UpdateUserRequest();
+        UserRequest request = new UserRequest();
         request.setEmail("updated@stratos.com");
         request.setRole(Set.of("admin"));
 

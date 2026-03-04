@@ -2,8 +2,7 @@ package com.stratos.controllers;
 
 import com.stratos.payload.request.TaskRequest;
 import com.stratos.payload.request.TaskSearchCriteria;
-import com.stratos.payload.request.OnCreate;
-import com.stratos.payload.request.OnUpdate;
+import com.stratos.validation.ValidationGroups;
 import com.stratos.payload.response.TaskResponse;
 import com.stratos.task.TaskService;
 import com.stratos.task.TaskStatus;
@@ -29,7 +28,7 @@ public class TaskController {
     public ResponseEntity<TaskResponse> createTask(
             @PathVariable Long workspaceId,
             @PathVariable Long projectNumber,
-            @Validated(OnCreate.class) @RequestBody TaskRequest request) {
+            @Validated(ValidationGroups.Create.class) @RequestBody TaskRequest request) {
         TaskResponse response = taskService.createTask(workspaceId, projectNumber, request);
         return ResponseEntity.ok(response);
     }
@@ -70,7 +69,7 @@ public class TaskController {
             @PathVariable Long workspaceId,
             @PathVariable Long projectNumber,
             @PathVariable Long taskNumber,
-            @Validated(OnUpdate.class) @RequestBody TaskRequest request) {
+            @Validated(ValidationGroups.Update.class) @RequestBody TaskRequest request) {
         TaskResponse response = taskService.updateTask(workspaceId, projectNumber, taskNumber, request);
         return ResponseEntity.ok(response);
     }

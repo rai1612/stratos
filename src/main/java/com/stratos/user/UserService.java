@@ -1,7 +1,6 @@
 package com.stratos.user;
 
-import com.stratos.payload.request.CreateUserRequest;
-import com.stratos.payload.request.UpdateUserRequest;
+import com.stratos.payload.request.UserRequest;
 import com.stratos.payload.response.UserResponse;
 import java.util.List;
 
@@ -10,9 +9,9 @@ public interface UserService {
 
     UserResponse getUserById(Long id);
 
-    UserResponse createUser(CreateUserRequest request);
+    UserResponse createUser(UserRequest request);
 
-    UserResponse updateUser(Long id, UpdateUserRequest request);
+    UserResponse updateUser(Long id, UserRequest request);
 
     void deleteUser(Long id);
 }
