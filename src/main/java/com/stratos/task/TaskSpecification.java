@@ -5,11 +5,12 @@ import jakarta.persistence.criteria.Predicate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.data.jpa.domain.Specification;
 
 public class TaskSpecification {
 
-    public static Specification<Task> getSpecification(Long projectId, TaskSearchCriteria criteria) {
+    public static Specification<Task> getSpecification(UUID projectId, TaskSearchCriteria criteria) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 

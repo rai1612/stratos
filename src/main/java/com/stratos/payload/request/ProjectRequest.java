@@ -15,6 +15,6 @@ public class ProjectRequest {
     private String name;
 
     @NotBlank(groups = ValidationGroups.Create.class)
-    @Size(min = 3, max = 10, groups = { ValidationGroups.Create.class, ValidationGroups.Update.class })
+    @Size(min = 2, max = 10, groups = { ValidationGroups.Create.class, ValidationGroups.Update.class })
     private String projectKey;
 }

@@ -1,14 +1,10 @@
 package com.stratos;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stratos.payload.request.LoginRequest;
-import com.stratos.payload.request.ProjectRequest;
 import com.stratos.payload.request.SignupRequest;
-import com.stratos.payload.request.WorkspaceRequest;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,8 +25,8 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected ObjectMapper objectMapper;
 
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("testdb")
+    private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine")
+            .withDatabaseName("stratos_test")
             .withUsername("test")
             .withPassword("test");
 
@@ -45,29 +41,13 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.password", postgres::getPassword);
     }
 
-    // ========================================================================
-    // Shared test helpers
-    // ========================================================================
-
-    /**
-     * Registers a user and logs in, returning the JWT token.
-     */
     protected String registerAndLogin(String username, String email) throws Exception {
-        return registerAndLogin(username, email, null);
-    }
-
-    /**
-     * Registers a user with optional roles and logs in, returning the JWT token.
-     */
-    protected String registerAndLogin(String username, String email, Set<String> roles)
-            throws Exception {
         SignupRequest signupRequest = new SignupRequest();
         signupRequest.setUsername(username);
         signupRequest.setEmail(email);
         signupRequest.setPassword("password123");
-        signupRequest.setRole(roles);
 
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signupRequest)));
 
@@ -75,53 +55,84 @@ public abstract class AbstractIntegrationTest {
         loginRequest.setUsername(username);
         loginRequest.setPassword("password123");
 
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
+        MvcResult result = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
                 .andReturn();
 
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("token").asText();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
     }
 
     /**
-     * Creates a workspace and returns its ID.
+     * Create a workspace and return its UUID id.
      */
-    protected Long createWorkspace(String token, String name) throws Exception {
-        WorkspaceRequest request = new WorkspaceRequest();
+    protected UUID createWorkspace(String token, String name) throws Exception {
+        var request = new com.stratos.payload.request.WorkspaceRequest();
         request.setName(name);
-        request.setDescription("Desc");
 
-        MvcResult result = mockMvc.perform(post("/api/workspaces")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asLong();
-    }
-
-    /**
-     * Creates a project and returns its projectNumber.
-     */
-    protected Long createProject(String token, String name, String key, Long workspaceId)
-            throws Exception {
-        ProjectRequest request = new ProjectRequest();
-        request.setName(name);
-        request.setProjectKey(key);
-
-        MvcResult result = mockMvc.perform(
-                post("/api/workspaces/" + workspaceId + "/projects")
+        MvcResult result = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/workspaces")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
                 .andReturn();
 
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("projectNumber").asLong();
+        String responseBody = result.getResponse().getContentAsString();
+        int statusCode = result.getResponse().getStatus();
+        if (statusCode != 200) {
+            throw new AssertionError("createWorkspace failed with status " + statusCode + ": " + responseBody);
+        }
+        String id = objectMapper.readTree(responseBody).get("id").asText();
+        return UUID.fromString(id);
+    }
+
+    /**
+     * Create a project and return its project key.
+     */
+    protected String createProject(String token, String name, String projectKey, UUID workspaceId)
+            throws Exception {
+        var request = new com.stratos.payload.request.ProjectRequest();
+        request.setName(name);
+        request.setProjectKey(projectKey);
+
+        String url = "/api/workspaces/" + workspaceId + "/projects";
+        MvcResult result = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        int statusCode = result.getResponse().getStatus();
+        if (statusCode != 200) {
+            throw new AssertionError("createProject failed with status " + statusCode + ": " + responseBody);
+        }
+        return objectMapper.readTree(responseBody).get("projectKey").asText();
+    }
+
+    /**
+     * Create a task and return its task number.
+     */
+    protected Long createTask(String token, String title, UUID workspaceId, String projectKey)
+            throws Exception {
+        var request = new com.stratos.payload.request.TaskRequest();
+        request.setTitle(title);
+
+        String url = "/api/workspaces/" + workspaceId + "/projects/" + projectKey + "/tasks";
+        MvcResult result = mockMvc
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        int statusCode = result.getResponse().getStatus();
+        if (statusCode != 200) {
+            throw new AssertionError("createTask failed with status " + statusCode + ": " + responseBody);
+        }
+        return objectMapper.readTree(responseBody).get("taskNumber").asLong();
     }
 }

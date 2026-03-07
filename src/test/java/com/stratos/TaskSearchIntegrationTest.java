@@ -11,6 +11,7 @@ import com.stratos.payload.request.TaskRequest;
 import com.stratos.task.TaskPriority;
 import com.stratos.task.TaskStatus;
 import java.time.LocalDate;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -21,32 +22,34 @@ import org.springframework.transaction.annotation.Transactional;
 class TaskSearchIntegrationTest extends AbstractIntegrationTest {
 
         private String token;
-        private Long workspaceId;
-        private Long projectNumber;
+        private UUID workspaceId;
+        private String projectKey;
 
         @BeforeEach
         void setUp() throws Exception {
                 token = registerAndLogin("search_user", "search@stratos.com");
-                workspaceId = createWorkspace(token, "Search WS");
-                projectNumber = createProject(token, "Search Project", "SRCH", workspaceId);
+                workspaceId = createWorkspace(token, "Search Workspace");
+                projectKey = createProject(token, "Search Project", "SRCH", workspaceId);
 
-                String taskBasePath = "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
+                String taskBasePath = "/api/workspaces/" + workspaceId + "/projects/" + projectKey + "/tasks";
 
                 // Seed Data
-                createTask("Task 1", TaskStatus.TODO, TaskPriority.LOW, LocalDate.now().plusDays(1));
-                createTask("Task 2", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, LocalDate.now().plusDays(2));
-                // Cannot create with DONE status, so create as IN_PROGRESS and then update
-                Long task3Number = createTaskAndGetNumber("Task 3", TaskStatus.IN_PROGRESS, TaskPriority.MEDIUM,
+                createTaskWithDetails("Task 1", TaskStatus.TODO, TaskPriority.LOW, LocalDate.now().plusDays(1));
+                createTaskWithDetails("Task 2", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, LocalDate.now().plusDays(2));
+
+                // Create task 3 as IN_PROGRESS then update to DONE
+                Long task3Num = createTaskWithDetailsAndGetNumber("Task 3", TaskStatus.IN_PROGRESS, TaskPriority.MEDIUM,
                                 LocalDate.now().plusDays(3));
-                mockMvc.perform(patch(taskBasePath + "/" + task3Number + "/status")
+                mockMvc.perform(patch(taskBasePath + "/" + task3Num + "/status")
                                 .header("Authorization", "Bearer " + token)
                                 .param("status", "DONE"))
                                 .andExpect(status().isOk());
-                createTask("Task 4", TaskStatus.TODO, TaskPriority.HIGH, LocalDate.now().plusDays(4));
+
+                createTaskWithDetails("Task 4", TaskStatus.TODO, TaskPriority.HIGH, LocalDate.now().plusDays(4));
         }
 
         private String searchPath() {
-                return "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks/search";
+                return "/api/workspaces/" + workspaceId + "/projects/" + projectKey + "/tasks/search";
         }
 
         @Test
@@ -91,7 +94,7 @@ class TaskSearchIntegrationTest extends AbstractIntegrationTest {
                                 .andExpect(jsonPath("$.page.totalElements").value(4));
         }
 
-        private void createTask(String title, TaskStatus status, TaskPriority priority, LocalDate dueDate)
+        private void createTaskWithDetails(String title, TaskStatus status, TaskPriority priority, LocalDate dueDate)
                         throws Exception {
                 TaskRequest request = new TaskRequest();
                 request.setTitle(title);
@@ -99,7 +102,7 @@ class TaskSearchIntegrationTest extends AbstractIntegrationTest {
                 request.setPriority(priority);
                 request.setDueDate(dueDate);
 
-                String taskPath = "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
+                String taskPath = "/api/workspaces/" + workspaceId + "/projects/" + projectKey + "/tasks";
                 mockMvc.perform(post(taskPath)
                                 .header("Authorization", "Bearer " + token)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -107,15 +110,15 @@ class TaskSearchIntegrationTest extends AbstractIntegrationTest {
                                 .andExpect(status().isOk());
         }
 
-        private Long createTaskAndGetNumber(String title, TaskStatus status, TaskPriority priority, LocalDate dueDate)
-                        throws Exception {
+        private Long createTaskWithDetailsAndGetNumber(String title, TaskStatus status, TaskPriority priority,
+                        LocalDate dueDate) throws Exception {
                 TaskRequest request = new TaskRequest();
                 request.setTitle(title);
                 request.setStatus(status);
                 request.setPriority(priority);
                 request.setDueDate(dueDate);
 
-                String taskPath = "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
+                String taskPath = "/api/workspaces/" + workspaceId + "/projects/" + projectKey + "/tasks";
                 MvcResult result = mockMvc.perform(post(taskPath)
                                 .header("Authorization", "Bearer " + token)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -123,7 +126,6 @@ class TaskSearchIntegrationTest extends AbstractIntegrationTest {
                                 .andExpect(status().isOk())
                                 .andReturn();
 
-                String response = result.getResponse().getContentAsString();
-                return objectMapper.readTree(response).get("taskNumber").asLong();
+                return objectMapper.readTree(result.getResponse().getContentAsString()).get("taskNumber").asLong();
         }
 }

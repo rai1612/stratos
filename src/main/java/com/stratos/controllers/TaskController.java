@@ -7,6 +7,7 @@ import com.stratos.payload.response.TaskResponse;
 import com.stratos.task.TaskService;
 import com.stratos.task.TaskStatus;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,81 +18,81 @@ import org.springframework.web.bind.annotation.*;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
-@RequestMapping("/api/workspaces/{workspaceId}/projects/{projectNumber}/tasks")
+@RequestMapping("/api/workspaces/{workspaceId}/projects/{projectKey}/tasks")
 @RequiredArgsConstructor
 public class TaskController {
 
     private final TaskService taskService;
 
     @PostMapping
-    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    @PreAuthorize("@workspaceSecurity.hasRole(authentication, #workspaceId, 'MEMBER')")
     public ResponseEntity<TaskResponse> createTask(
-            @PathVariable Long workspaceId,
-            @PathVariable Long projectNumber,
+            @PathVariable UUID workspaceId,
+            @PathVariable String projectKey,
             @Validated(ValidationGroups.Create.class) @RequestBody TaskRequest request) {
-        TaskResponse response = taskService.createTask(workspaceId, projectNumber, request);
+        TaskResponse response = taskService.createTask(workspaceId, projectKey, request);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{taskNumber}")
-    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
-    public ResponseEntity<TaskResponse> getTaskByNumber(
-            @PathVariable Long workspaceId,
-            @PathVariable Long projectNumber,
+    @PreAuthorize("@workspaceSecurity.hasRole(authentication, #workspaceId, 'VIEWER')")
+    public ResponseEntity<TaskResponse> getTask(
+            @PathVariable UUID workspaceId,
+            @PathVariable String projectKey,
             @PathVariable Long taskNumber) {
-        TaskResponse response = taskService.getTaskByNumber(workspaceId, projectNumber, taskNumber);
+        TaskResponse response = taskService.getTask(workspaceId, projectKey, taskNumber);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    @PreAuthorize("@workspaceSecurity.hasRole(authentication, #workspaceId, 'VIEWER')")
     public ResponseEntity<List<TaskResponse>> getTasksByProject(
-            @PathVariable Long workspaceId,
-            @PathVariable Long projectNumber) {
-        List<TaskResponse> response = taskService.getTasksByProject(workspaceId, projectNumber);
+            @PathVariable UUID workspaceId,
+            @PathVariable String projectKey) {
+        List<TaskResponse> response = taskService.getTasksByProject(workspaceId, projectKey);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    @PreAuthorize("@workspaceSecurity.hasRole(authentication, #workspaceId, 'VIEWER')")
     public ResponseEntity<Page<TaskResponse>> searchTasks(
-            @PathVariable Long workspaceId,
-            @PathVariable Long projectNumber,
+            @PathVariable UUID workspaceId,
+            @PathVariable String projectKey,
             TaskSearchCriteria criteria,
             Pageable pageable) {
-        Page<TaskResponse> response = taskService.searchTasks(workspaceId, projectNumber, criteria, pageable);
+        Page<TaskResponse> response = taskService.searchTasks(workspaceId, projectKey, criteria, pageable);
         return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{taskNumber}")
-    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    @PreAuthorize("@workspaceSecurity.hasRole(authentication, #workspaceId, 'MEMBER')")
     public ResponseEntity<TaskResponse> updateTask(
-            @PathVariable Long workspaceId,
-            @PathVariable Long projectNumber,
+            @PathVariable UUID workspaceId,
+            @PathVariable String projectKey,
             @PathVariable Long taskNumber,
             @Validated(ValidationGroups.Update.class) @RequestBody TaskRequest request) {
-        TaskResponse response = taskService.updateTask(workspaceId, projectNumber, taskNumber, request);
+        TaskResponse response = taskService.updateTask(workspaceId, projectKey, taskNumber, request);
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{taskNumber}/status")
-    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    @PreAuthorize("@workspaceSecurity.hasRole(authentication, #workspaceId, 'MEMBER')")
     public ResponseEntity<TaskResponse> updateTaskStatus(
-            @PathVariable Long workspaceId,
-            @PathVariable Long projectNumber,
+            @PathVariable UUID workspaceId,
+            @PathVariable String projectKey,
             @PathVariable Long taskNumber,
             @RequestParam TaskStatus status) {
-        TaskResponse response = taskService.updateTaskStatus(workspaceId, projectNumber, taskNumber, status);
+        TaskResponse response = taskService.updateTaskStatus(workspaceId, projectKey, taskNumber, status);
         return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{taskNumber}")
-    @PreAuthorize("hasRole('USER') or hasRole('MANAGER') or hasRole('ADMIN')")
+    @PreAuthorize("@workspaceSecurity.hasRole(authentication, #workspaceId, 'MEMBER')")
     public ResponseEntity<Void> deleteTask(
-            @PathVariable Long workspaceId,
-            @PathVariable Long projectNumber,
+            @PathVariable UUID workspaceId,
+            @PathVariable String projectKey,
             @PathVariable Long taskNumber) {
-        taskService.deleteTask(workspaceId, projectNumber, taskNumber);
+        taskService.deleteTask(workspaceId, projectKey, taskNumber);
         return ResponseEntity.noContent().build();
     }
 }

@@ -8,15 +8,17 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Getter
 @Setter
 @Table(name = "projects", uniqueConstraints = {
-        @jakarta.persistence.UniqueConstraint(columnNames = { "workspace_id", "project_key" }),
-        @jakarta.persistence.UniqueConstraint(columnNames = { "workspace_id", "project_number" })
+        @UniqueConstraint(columnNames = { "workspace_id", "project_key" })
 })
 public class Project extends BaseEntity {
 
@@ -26,13 +28,11 @@ public class Project extends BaseEntity {
     @Column(name = "project_key", nullable = false, length = 10)
     private String projectKey; // e.g. "STRAT" for Stratos Project
 
-    @Column(name = "project_number", nullable = false)
-    private Long projectNumber; // Scoped within workspace: 1, 2, 3...
-
-    @Column(nullable = false)
+    @Column(name = "task_counter", nullable = false)
     private Long taskCounter = 0L;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workspace_id", referencedColumnName = "id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Workspace workspace;
 }

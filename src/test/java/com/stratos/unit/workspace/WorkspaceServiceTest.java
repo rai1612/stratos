@@ -12,12 +12,14 @@ import com.stratos.payload.response.WorkspaceResponse;
 import com.stratos.user.User;
 import com.stratos.user.UserRepository;
 import com.stratos.workspace.Workspace;
+import com.stratos.workspace.WorkspaceMember;
+import com.stratos.workspace.WorkspaceMemberRepository;
 import com.stratos.workspace.WorkspaceRepository;
+import com.stratos.workspace.WorkspaceRole;
 import com.stratos.workspace.WorkspaceService;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
+import java.util.UUID;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,153 +34,140 @@ class WorkspaceServiceTest {
     private WorkspaceRepository workspaceRepository;
 
     @Mock
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Mock
     private UserRepository userRepository;
 
     @InjectMocks
     private WorkspaceService workspaceService;
 
-    private User owner;
-    private Workspace workspace;
+    private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID WORKSPACE_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
 
-    @BeforeEach
-    void setUp() {
-        owner = new User("owner", "owner@stratos.com", "hashed");
-        owner.setId(1L);
-
-        workspace = new Workspace();
-        workspace.setId(10L);
-        workspace.setName("Test WS");
-        workspace.setDescription("A workspace");
-        workspace.setOwner(owner);
-        workspace.setProjectCounter(0L);
+    private User createTestUser() {
+        User user = new User("testuser", "test@stratos.com", "hashed");
+        user.setId(USER_ID);
+        return user;
     }
 
-    // ========================================================================
-    // createWorkspace
-    // ========================================================================
+    private Workspace createTestWorkspace() {
+        Workspace workspace = new Workspace();
+        workspace.setId(WORKSPACE_ID);
+        workspace.setName("Test Workspace");
+        workspace.setDescription("Test Description");
+        return workspace;
+    }
 
     @Nested
     class CreateWorkspace {
 
         @Test
-        void shouldCreateWorkspace() {
-            WorkspaceRequest request = new WorkspaceRequest();
-            request.setName("New WS");
-            request.setDescription("New description");
-
-            when(userRepository.findById(1L)).thenReturn(Optional.of(owner));
+        void shouldCreateWorkspaceSuccessfully() {
+            User user = createTestUser();
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> {
-                Workspace saved = invocation.getArgument(0);
-                saved.setId(10L);
-                return saved;
+                Workspace ws = invocation.getArgument(0);
+                ws.setId(WORKSPACE_ID);
+                return ws;
             });
 
-            WorkspaceResponse response = workspaceService.createWorkspace(1L, request);
+            WorkspaceRequest request = new WorkspaceRequest();
+            request.setName("New Workspace");
+            request.setDescription("Desc");
 
-            assertThat(response.getName()).isEqualTo("New WS");
-            assertThat(response.getDescription()).isEqualTo("New description");
-            assertThat(response.getOwnerId()).isEqualTo(1L);
+            WorkspaceResponse response = workspaceService.createWorkspace(USER_ID, request);
+
+            assertThat(response.getName()).isEqualTo("New Workspace");
+            assertThat(response.getRole()).isEqualTo(WorkspaceRole.OWNER);
         }
 
         @Test
         void shouldThrowWhenUserNotFound() {
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
             WorkspaceRequest request = new WorkspaceRequest();
-            request.setName("No Owner WS");
+            request.setName("New Workspace");
 
-            when(userRepository.findById(999L)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> workspaceService.createWorkspace(999L, request))
+            assertThatThrownBy(() -> workspaceService.createWorkspace(USER_ID, request))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("999");
+                    .hasMessageContaining("User not found");
         }
     }
 
-    // ========================================================================
-    // getWorkspaceById
-    // ========================================================================
-
     @Nested
-    class GetWorkspaceById {
+    class GetWorkspace {
 
         @Test
-        void shouldReturnMappedResponse() {
-            when(workspaceRepository.findById(10L)).thenReturn(Optional.of(workspace));
+        void shouldGetWorkspaceById() {
+            Workspace workspace = createTestWorkspace();
+            when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
 
-            WorkspaceResponse response = workspaceService.getWorkspaceById(10L);
+            WorkspaceMember member = new WorkspaceMember(workspace, createTestUser(), WorkspaceRole.OWNER);
+            when(workspaceMemberRepository.findByWorkspaceIdAndUserId(WORKSPACE_ID, USER_ID))
+                    .thenReturn(Optional.of(member));
 
-            assertThat(response.getId()).isEqualTo(10L);
-            assertThat(response.getName()).isEqualTo("Test WS");
-            assertThat(response.getDescription()).isEqualTo("A workspace");
-            assertThat(response.getOwnerId()).isEqualTo(1L);
+            WorkspaceResponse response = workspaceService.getWorkspaceById(WORKSPACE_ID, USER_ID);
+
+            assertThat(response.getId()).isEqualTo(WORKSPACE_ID);
+            assertThat(response.getName()).isEqualTo("Test Workspace");
         }
 
         @Test
-        void shouldThrowWhenNotFound() {
-            when(workspaceRepository.findById(999L)).thenReturn(Optional.empty());
+        void shouldThrowWhenWorkspaceNotFound() {
+            when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> workspaceService.getWorkspaceById(999L))
-                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> workspaceService.getWorkspaceById(WORKSPACE_ID, USER_ID))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("Workspace not found");
         }
     }
 
-    // ========================================================================
-    // getAllWorkspacesByUserId
-    // ========================================================================
-
     @Nested
-    class GetAllWorkspacesByUserId {
+    class GetAllWorkspaces {
 
         @Test
-        void shouldReturnMappedList() {
-            Workspace workspace2 = new Workspace();
-            workspace2.setId(11L);
-            workspace2.setName("WS 2");
-            workspace2.setDescription("Second");
-            workspace2.setOwner(owner);
+        void shouldReturnAllWorkspacesForUser() {
+            Workspace workspace = createTestWorkspace();
+            WorkspaceMember member = new WorkspaceMember(workspace, createTestUser(), WorkspaceRole.OWNER);
+            when(workspaceMemberRepository.findByUserId(USER_ID)).thenReturn(List.of(member));
 
-            when(workspaceRepository.findByOwnerId(1L))
-                    .thenReturn(List.of(workspace, workspace2));
+            List<WorkspaceResponse> responses = workspaceService.getAllWorkspacesByUserId(USER_ID);
 
-            List<WorkspaceResponse> responses = workspaceService.getAllWorkspacesByUserId(1L);
-
-            assertThat(responses).hasSize(2);
-            assertThat(responses.get(0).getName()).isEqualTo("Test WS");
-            assertThat(responses.get(1).getName()).isEqualTo("WS 2");
+            assertThat(responses).hasSize(1);
+            assertThat(responses.get(0).getName()).isEqualTo("Test Workspace");
         }
 
         @Test
-        void shouldReturnEmptyList() {
-            when(workspaceRepository.findByOwnerId(1L))
-                    .thenReturn(Collections.emptyList());
+        void shouldReturnEmptyListWhenNoWorkspaces() {
+            when(workspaceMemberRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
-            List<WorkspaceResponse> responses = workspaceService.getAllWorkspacesByUserId(1L);
+            List<WorkspaceResponse> responses = workspaceService.getAllWorkspacesByUserId(USER_ID);
 
             assertThat(responses).isEmpty();
         }
     }
 
-    // ========================================================================
-    // deleteWorkspace
-    // ========================================================================
-
     @Nested
     class DeleteWorkspace {
 
         @Test
-        void shouldDeleteWorkspace() {
-            when(workspaceRepository.existsById(10L)).thenReturn(true);
+        void shouldDeleteWorkspaceSuccessfully() {
+            Workspace workspace = createTestWorkspace();
+            when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
 
-            workspaceService.deleteWorkspace(10L);
+            workspaceService.deleteWorkspace(WORKSPACE_ID);
 
-            verify(workspaceRepository).deleteById(10L);
+            verify(workspaceRepository).delete(workspace);
         }
 
         @Test
-        void shouldThrowWhenNotFound() {
-            when(workspaceRepository.existsById(999L)).thenReturn(false);
+        void shouldThrowWhenDeletingNonExistentWorkspace() {
+            when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> workspaceService.deleteWorkspace(999L))
-                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> workspaceService.deleteWorkspace(WORKSPACE_ID))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("Workspace not found");
         }
     }
 }

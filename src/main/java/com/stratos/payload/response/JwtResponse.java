@@ -1,5 +1,6 @@
 package com.stratos.payload.response;
 
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -8,11 +9,11 @@ import lombok.Setter;
 public class JwtResponse {
     private String token;
     private String type = "Bearer";
-    private Long id;
+    private UUID id;
     private String username;
     private String email;
 
-    public JwtResponse(String accessToken, Long id, String username, String email) {
+    public JwtResponse(String accessToken, UUID id, String username, String email) {
         this.token = accessToken;
         this.id = id;
         this.username = username;

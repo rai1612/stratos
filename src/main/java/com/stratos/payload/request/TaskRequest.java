@@ -7,6 +7,7 @@ import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -28,5 +29,5 @@ public class TaskRequest {
             ValidationGroups.Update.class })
     private LocalDate dueDate;
 
-    private Long assigneeId; // Optional
+    private UUID assigneeId; // Optional
 }

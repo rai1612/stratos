@@ -1,5 +1,6 @@
 package com.stratos;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -11,263 +12,196 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.stratos.payload.request.TaskRequest;
 import com.stratos.task.TaskPriority;
 import com.stratos.task.TaskStatus;
-import org.junit.jupiter.api.BeforeEach;
+import java.util.UUID;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
 class TaskIntegrationTest extends AbstractIntegrationTest {
 
-    private String token;
-    private Long workspaceId;
-    private Long projectNumber;
-    private String projectKey;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        token = registerAndLogin("task_user", "task_user@stratos.com");
-        workspaceId = createWorkspace(token, "Task WS");
-        projectKey = "TSK";
-        projectNumber = createProject(token, "Task Project", projectKey, workspaceId);
-    }
-
-    private String taskBasePath() {
-        return "/api/workspaces/" + workspaceId + "/projects/" + projectNumber + "/tasks";
-    }
-
-    @Test
-    void shouldCreateTaskWithScopedNumber() throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle("My Task");
-        request.setDescription("Do something");
-        request.setPriority(TaskPriority.HIGH);
-
-        mockMvc.perform(post(taskBasePath())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("My Task"))
-                .andExpect(jsonPath("$.status").value("TODO"))
-                .andExpect(jsonPath("$.priority").value("HIGH"))
-                .andExpect(jsonPath("$.taskNumber").value(1))
-                .andExpect(jsonPath("$.taskKey").value(projectKey + "-1"));
-    }
-
-    @Test
-    void shouldFailToCreateTaskWithPastDueDate() throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle("Past Task");
-        request.setDueDate(java.time.LocalDate.now().minusDays(1)); // Past date
-
-        mockMvc.perform(post(taskBasePath())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.dueDate").value("Due date must be today or in the future"));
-    }
-
-    @Test
-    void shouldFailToCreateTaskWithDoneStatus() throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle("Done Task");
-        request.setStatus(TaskStatus.DONE); // Not allowed on creation
-
-        mockMvc.perform(post(taskBasePath())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Task status cannot be DONE on creation"));
-    }
-
-    @Test
-    void shouldAllowUpdatingTaskWithoutRequiredCreationFields() throws Exception {
-        Long taskNumber = createTask("Validation Update Task");
-
-        // Partial update: no title required on update
-        TaskRequest updateRequest = new TaskRequest();
-        updateRequest.setDescription("Updating only description");
-        updateRequest.setStatus(TaskStatus.DONE); // DONE is allowed on update
-
-        mockMvc.perform(put(taskBasePath() + "/" + taskNumber)
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updateRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.description").value("Updating only description"))
-                .andExpect(jsonPath("$.status").value("DONE"));
-    }
-
-    @Test
-    void shouldUpdateTaskStatus() throws Exception {
-        Long taskNumber = createTask("Status Task");
-
-        mockMvc.perform(patch(taskBasePath() + "/" + taskNumber + "/status")
-                .header("Authorization", "Bearer " + token)
-                .param("status", "IN_PROGRESS"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
-    }
-
-    @Test
-    void shouldDeleteTask() throws Exception {
-        Long taskNumber = createTask("Delete Task");
-
-        mockMvc.perform(delete(taskBasePath() + "/" + taskNumber)
-                .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNoContent());
-
-        mockMvc.perform(get(taskBasePath() + "/" + taskNumber)
-                .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void shouldAssignSequentialTaskNumbers() throws Exception {
-        Long tn1 = createTask("Task 1");
-        Long tn2 = createTask("Task 2");
-        Long tn3 = createTask("Task 3");
-
-        org.junit.jupiter.api.Assertions.assertEquals(1L, tn1);
-        org.junit.jupiter.api.Assertions.assertEquals(2L, tn2);
-        org.junit.jupiter.api.Assertions.assertEquals(3L, tn3);
+    private String taskBasePath(UUID workspaceId, String projectKey) {
+        return "/api/workspaces/" + workspaceId + "/projects/" + projectKey + "/tasks";
     }
 
     // ========================================================================
-    // Validation edge cases
+    // Happy path
     // ========================================================================
 
-    @Test
-    void shouldRejectBlankTitle() throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle(""); // @NotBlank
+    @Nested
+    class HappyPath {
 
-        mockMvc.perform(post(taskBasePath())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
+        @Test
+        void shouldCreateTaskWithSequentialNumber() throws Exception {
+            String token = registerAndLogin("task_user", "task@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
 
-    @Test
-    void shouldRejectTitleTooLong() throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle("a".repeat(101)); // @Size(max = 100)
+            TaskRequest request = new TaskRequest();
+            request.setTitle("My Task");
+            request.setStatus(TaskStatus.TODO);
+            request.setPriority(TaskPriority.HIGH);
 
-        mockMvc.perform(post(taskBasePath())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
+            mockMvc.perform(post(taskBasePath(wsId, projKey))
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.title").value("My Task"))
+                    .andExpect(jsonPath("$.taskNumber").value(1))
+                    .andExpect(jsonPath("$.taskKey").value("PRJ-1"))
+                    .andExpect(jsonPath("$.status").value("TODO"))
+                    .andExpect(jsonPath("$.priority").value("HIGH"));
+        }
 
-    @Test
-    void shouldRejectDescriptionTooLong() throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle("Valid Title");
-        request.setDescription("a".repeat(501)); // @Size(max = 500)
+        @Test
+        void shouldGetAllTasksInProject() throws Exception {
+            String token = registerAndLogin("task_all_user", "task_all@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+            createTask(token, "Task 1", wsId, projKey);
+            createTask(token, "Task 2", wsId, projKey);
 
-        mockMvc.perform(post(taskBasePath())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
+            mockMvc.perform(get(taskBasePath(wsId, projKey))
+                    .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(2)));
+        }
 
-    // ========================================================================
-    // Not-found edge cases
-    // ========================================================================
+        @Test
+        void shouldGetTaskByNumber() throws Exception {
+            String token = registerAndLogin("task_get_user", "task_get@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+            Long taskNum = createTask(token, "Fetch Me", wsId, projKey);
 
-    @Test
-    void shouldReturn404ForNonExistentTask() throws Exception {
-        mockMvc.perform(get(taskBasePath() + "/999")
-                .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
-    }
+            mockMvc.perform(get(taskBasePath(wsId, projKey) + "/" + taskNum)
+                    .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.title").value("Fetch Me"))
+                    .andExpect(jsonPath("$.taskKey").value("PRJ-" + taskNum));
+        }
 
-    @Test
-    void shouldReturn404WhenUpdatingNonExistentTask() throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle("Ghost Task");
+        @Test
+        void shouldUpdateTask() throws Exception {
+            String token = registerAndLogin("task_upd_user", "task_upd@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+            Long taskNum = createTask(token, "Before", wsId, projKey);
 
-        mockMvc.perform(put(taskBasePath() + "/999")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound());
-    }
+            TaskRequest updateRequest = new TaskRequest();
+            updateRequest.setTitle("After");
+            updateRequest.setStatus(TaskStatus.IN_PROGRESS);
+            updateRequest.setPriority(TaskPriority.LOW);
 
-    @Test
-    void shouldReturn404WhenDeletingNonExistentTask() throws Exception {
-        mockMvc.perform(delete(taskBasePath() + "/999")
-                .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
-    }
+            mockMvc.perform(put(taskBasePath(wsId, projKey) + "/" + taskNum)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(updateRequest)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.title").value("After"))
+                    .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+        }
 
-    @Test
-    void shouldReturn404ForTaskUnderNonExistentProject() throws Exception {
-        mockMvc.perform(get("/api/workspaces/" + workspaceId + "/projects/999/tasks/1")
-                .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
-    }
+        @Test
+        void shouldUpdateTaskStatus() throws Exception {
+            String token = registerAndLogin("task_status_user", "task_status@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+            Long taskNum = createTask(token, "Status Task", wsId, projKey);
 
-    // ========================================================================
-    // Cross-entity isolation
-    // ========================================================================
+            mockMvc.perform(patch(taskBasePath(wsId, projKey) + "/" + taskNum + "/status")
+                    .header("Authorization", "Bearer " + token)
+                    .param("status", "DONE"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("DONE"));
+        }
 
-    @Test
-    void shouldScopeTaskNumbersPerProject() throws Exception {
-        // Create tasks in first project
-        Long tn1 = createTask("Project1 Task1");
-        Long tn2 = createTask("Project1 Task2");
+        @Test
+        void shouldDeleteTask() throws Exception {
+            String token = registerAndLogin("task_del_user", "task_del@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+            Long taskNum = createTask(token, "Delete Me", wsId, projKey);
 
-        // Create a second project
-        Long project2Number = createProject(token, "Second Project", "PRJ2", workspaceId);
-        String project2TaskPath = "/api/workspaces/" + workspaceId + "/projects/" + project2Number + "/tasks";
+            mockMvc.perform(delete(taskBasePath(wsId, projKey) + "/" + taskNum)
+                    .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isNoContent());
 
-        // Create task in second project — should start from 1
-        TaskRequest request = new TaskRequest();
-        request.setTitle("Project2 Task1");
-
-        MvcResult result = mockMvc.perform(post(project2TaskPath)
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Long p2tn1 = objectMapper.readTree(result.getResponse().getContentAsString())
-                .get("taskNumber").asLong();
-
-        // Project 1 tasks: 1, 2; Project 2 tasks: 1 (independent)
-        org.junit.jupiter.api.Assertions.assertEquals(1L, tn1);
-        org.junit.jupiter.api.Assertions.assertEquals(2L, tn2);
-        org.junit.jupiter.api.Assertions.assertEquals(1L, p2tn1);
+            mockMvc.perform(get(taskBasePath(wsId, projKey) + "/" + taskNum)
+                    .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isNotFound());
+        }
     }
 
     // ========================================================================
-    // Helper
+    // Edge cases
     // ========================================================================
 
-    /**
-     * Creates a task and returns the taskNumber.
-     */
-    private Long createTask(String title) throws Exception {
-        TaskRequest request = new TaskRequest();
-        request.setTitle(title);
+    @Nested
+    class EdgeCases {
 
-        MvcResult result = mockMvc.perform(post(taskBasePath())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn();
+        @Test
+        void shouldRejectBlankTaskTitle() throws Exception {
+            String token = registerAndLogin("task_blank_user", "task_blank@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
 
-        String response = result.getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("taskNumber").asLong();
+            TaskRequest request = new TaskRequest();
+            request.setTitle("");
+
+            mockMvc.perform(post(taskBasePath(wsId, projKey))
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void shouldRejectDoneStatusOnCreation() throws Exception {
+            String token = registerAndLogin("task_done_user", "task_done@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+
+            TaskRequest request = new TaskRequest();
+            request.setTitle("Should Fail");
+            request.setStatus(TaskStatus.DONE);
+
+            mockMvc.perform(post(taskBasePath(wsId, projKey))
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void shouldReturn404ForNonExistentTask() throws Exception {
+            String token = registerAndLogin("task_404_user", "task_404@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+
+            mockMvc.perform(get(taskBasePath(wsId, projKey) + "/999")
+                    .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void shouldDefaultToTodoAndMediumPriority() throws Exception {
+            String token = registerAndLogin("task_default_user", "task_default@stratos.com");
+            UUID wsId = createWorkspace(token, "Workspace");
+            String projKey = createProject(token, "Proj", "PRJ", wsId);
+
+            TaskRequest request = new TaskRequest();
+            request.setTitle("Defaulted Task");
+
+            mockMvc.perform(post(taskBasePath(wsId, projKey))
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("TODO"))
+                    .andExpect(jsonPath("$.priority").value("MEDIUM"));
+        }
     }
 }

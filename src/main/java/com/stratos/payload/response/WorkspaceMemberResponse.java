@@ -1,5 +1,7 @@
 package com.stratos.payload.response;
 
+import com.stratos.workspace.WorkspaceRole;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -10,9 +12,11 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class ProjectResponse {
+public class WorkspaceMemberResponse {
     private UUID id;
-    private String name;
-    private String projectKey;
-    private UUID workspaceId;
+    private UUID userId;
+    private String username;
+    private String email;
+    private WorkspaceRole role;
+    private Instant joinedAt;
 }
